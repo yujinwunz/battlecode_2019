@@ -4,6 +4,16 @@ import {turn as pilgrim_turn} from 'pilgrim.js';
 import {turn as prophet_turn} from 'prophet.js';
 import {turn as preacher_turn} from 'preacher.js';
 
+import * as nav from 'nav.js';
+
+var obs_map = [
+    [0, 0, 1, 0, 0],
+    [0, 1, 0, 0, 0],
+    [0, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+];
+
+var map = nav.build_map(obs_map, [4, 0], 2, 5);
 var step = -1;
 
 class MyRobot extends BCAbstractRobot {

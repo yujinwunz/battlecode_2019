@@ -1,14 +1,16 @@
-const PQ = require('priorityqueue');
+import PQ from './priorityqueue';
 
-const ADJACENT = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
+export const ADJACENT = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
 
 // gaits
-const WALK = 0;
-const JOG = 1;
-const RUN = 3;
-const SPRINT = 10;
+export const GAITS = {
+    WALK: 0,
+    JOG: 1,
+    RUN: 3,
+    SPRINT: 10
+};
 
-EPS = 1e-10;
+var EPS = 1e-10;
 
 function null_array(cols, rows) {
     var map = [];
@@ -23,7 +25,7 @@ function null_array(cols, rows) {
 }
 
 // Returns a distancemap given the target location.
-function build_map(obs_map, target, max_jump=4, gait=0, robots=[]) {
+export function build_map(obs_map, target, max_jump=4, gait=0, robots=[]) {
     var [tx, ty] = target;
     var rows = obs_map.length;
     var cols = obs_map[0].length;
@@ -41,19 +43,17 @@ function build_map(obs_map, target, max_jump=4, gait=0, robots=[]) {
         obs_map = map;
     }
 
-    let dij = new PQ({
-        comparator: (a, b) => {
-            return b[0] + b[1] * gait - (a[0] + a[1] * gait);
+    let dij = new PQ(
+        [[0, 0, tx, ty]], 
+        (a, b) => {
+            return a[0] + a[1] * gait - (b[0] + b[1] * gait);
         }
-    });
-
-        //  fuel, time, x, y
-    dij.push([0, 0, tx, ty]);
+    );
 
     var res = null_array(cols, rows);
 
     var root=Math.ceil(Math.sqrt(max_jump)-EPS);
-    while (dij.size()) {
+    while (dij.length) {
         var [f, t, x, y] = dij.pop();
 
         if (res[y][x] !== null) continue;
@@ -77,7 +77,7 @@ function build_map(obs_map, target, max_jump=4, gait=0, robots=[]) {
 
 // Returns next location a unit should go to if we should go UP TO "step" distance
 // away.
-function path_step(map, from, step) {
+export function path_step(map, from, step) {
     var rows = map.length;
     var cols = map[0].length;
 
@@ -107,15 +107,3 @@ function path_step(map, from, step) {
 
     return bestto;
 }
-
-module.exports = {
-    ADJACENT,
-    path_step,
-    build_map,
-    gaits: {
-        WALK,
-        JOG,
-        RUN,
-        SPRINT
-    }
-};
