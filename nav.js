@@ -12,7 +12,7 @@ export const GAITS = {
 
 var EPS = 1e-10;
 
-function null_array(cols, rows) {
+export function null_array(cols, rows) {
     var map = [];
     for (var i = 0; i < rows; i++) {
         var toadd = [];
@@ -24,23 +24,31 @@ function null_array(cols, rows) {
     return map;
 }
 
+export function distcmp(a, b) {
+    if (a[0] === b[0]) return a[1] - b[1];
+    return a[0] - b[0];
+}
+
 // Returns a distancemap given the target location.
-export function build_map(obs_map, target, max_jump=4, gait=0, robots=[]) {
+export function build_map(pass_map, target, max_jump=4, gait=0, robots=[]) {
     var [tx, ty] = target;
-    var rows = obs_map.length;
-    var cols = obs_map[0].length;
+    var rows = pass_map.length;
+    var cols = pass_map[0].length;
 
     if (robots) {
         var map = [];
         for (var y = 0; y < rows; y++) {
-            map.push(obs_map[y].slice());
+            map.push(pass_map[y].slice());
+        }
+        
+        for (var i = 0; i < robots.length; i++) {
+            var r = robots[i];
+            if ("x" in r) {
+                map[r.y][r.x] = false; // block visible robots
+            }
         }
 
-        for (var r in robots) {
-            map[r.x][r.y] = true; // block visible robots
-        }
-
-        obs_map = map;
+        pass_map = map;
     }
 
     let dij = new PQ(
@@ -66,7 +74,7 @@ export function build_map(obs_map, target, max_jump=4, gait=0, robots=[]) {
                 if (nx < 0 || nx >= cols) continue;
                 if (ny < 0 || ny >= rows) continue;
                 
-                if (obs_map[ny][nx]) continue;
+                if (!pass_map[ny][nx]) continue;
                 dij.push([f + dx*dx + dy*dy, t+1, nx, ny]);   
             }
         }
@@ -81,8 +89,8 @@ export function path_step(map, from, step) {
     var rows = map.length;
     var cols = map[0].length;
 
-    var bestdist = (1<<30);
-    var bestto = null;
+    var bestdist = [(1<<30), 0];
+    var bestto = [null, null];
 
     var [sx, sy] = from;
 
@@ -97,7 +105,7 @@ export function path_step(map, from, step) {
             if (map[ny][nx] === null) continue;
 
             if (dx*dx + dy*dy <= step) {
-                if (map[ny][nx] < bestdist) {
+                if (distcmp(map[ny][nx], bestdist) < 0) {
                     bestdist = map[ny][nx];
                     bestto = [nx, ny];
                 }
@@ -106,4 +114,13 @@ export function path_step(map, from, step) {
     }
 
     return bestto;
+}
+
+export function printmap(console, map) {
+    var rows = map.length;
+    var cols = map[0].length;
+
+    for (var y = 0; y < rows; y++) {
+        console.log(map[y]);
+    }
 }
