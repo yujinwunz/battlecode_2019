@@ -1,4 +1,5 @@
 import PQ from './priorityqueue';
+import * as util from 'util.js';
 
 export const ADJACENT = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
 
@@ -78,6 +79,8 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[]) {
         }
 
         pass_map = map;
+        pass_map[ty][tx] = true; // in case destination is an occupied square. At least allow
+                                 // searching.
     }
 
     let dij = new Queue(); /* new PQ(
@@ -132,26 +135,39 @@ export function path_step(map, from, step, robots=[]) {
     var rows = map.length;
     var cols = map[0].length;
 
-    var bestdist = [(1<<30), 0];
-    var bestto = [null, null];
-
     var [sx, sy] = from;
+
+    var bestdist = map[sy][sx] ? map[sy][sx] : [(1<<30), 0];
+    var bestto = [null, null];
 
     var max_coord = Math.ceil(Math.sqrt(step) - EPS);
     for (var dx = -max_coord; dx <= max_coord; dx++) {
         for (var dy = -max_coord; dy <= max_coord; dy++) {
-            if (dx === 0 && dy === 0) continue;
+            
+            if (dx === 0 && dy === 0) {
+                // To prevent "orbiting" around an occupied goal, don't force a move
+                // when 1 away from goal
+                if (!map[sy][sx] || map[sy][sx][1] > 1) {
+                    continue; // Help avoid "awkward hallway dance"
+                }
+            }
             
             var nx = sx+dx;
             var ny = sy+dy;
-            if (robots_collide(robots, [nx, ny])) continue;
+            if (robots_collide(robots, [nx, ny])) {
+                if (dx !== sx || dy !== sy)
+                    continue;
+            }
 
             if (nx < 0 || nx >= cols) continue;
             if (ny < 0 || ny >= rows) continue;
             if (map[ny][nx] === null) continue;
 
             if (dx*dx + dy*dy <= step) {
-                if (distcmp(map[ny][nx], bestdist) < 0) {
+                var newd = distcmp(map[ny][nx], bestdist);
+
+                // Add a bit of randomness to break the "awkward dance" along the hallways.
+                if (newd < 0 || (newd == 0 && Math.random() < 0.2)) {
                     bestdist = map[ny][nx];
                     bestto = [nx, ny];
                 }
@@ -167,6 +183,12 @@ export function printmap(console, map) {
     var cols = map[0].length;
 
     for (var y = 0; y < rows; y++) {
-        console.log(map[y]);
+        var p = "";
+        for (var x = 0; x < rows; x++) {
+            var t = "" + map[y][x];
+            while (t.length < 6) t += " ";
+            p += t;
+        }
+        console.log(p);
     }
 }

@@ -7,6 +7,8 @@ const MINING = 1;
 const GOING_HOME = 2;
 const DANGER = 3;
 
+const DEFAULT_SPEED = 4;
+
 var home;
 var state;
 var targetmap;
@@ -21,7 +23,7 @@ function get_adjacent_castle(robots, me) {
         if (!("team" in r)) continue;
         if (!("unit" in r)) continue;
         if (!("x" in r)) continue;
-        if ((r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) && r.team == me.team) {
+        if ((r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) && r.team === me.team) {
             if (Math.abs(r.x - me.x) <= 1 && Math.abs(r.y - me.y) <= 1) return r;
         }
     }
@@ -29,17 +31,13 @@ function get_adjacent_castle(robots, me) {
 }
 
 export function turn(game, steps) {
-    game.log("I am a pilgrim");
+    game.log("I am a pilgrim state " + state + " home " + home + " target " + target);
     var robots = game.getVisibleRobots();
     if (steps === 1) {
         game.log("Initializing");
-        home = [game.me.x, game.me.y]; // Return here to deposit
         state = GOING_TO_TARGET;
-        homemap = nav.build_map(game.map
-            , [game.me.x, game.me.y]
-            , MYSPEC.SPEED
-            , nav.GAITS.WALK
-        );
+
+        home = [game.me.x, game.me.y];
 
         // Get an initialization message from castle
         for (var i = 0; i < robots.length; i++) {
@@ -52,6 +50,7 @@ export function turn(game, steps) {
                     
                     game.log("Pilgrim got message " + r.signal + " type " + msg.type);
                     game.log("Message was from " + r.unit + " " + r.x + " " + r.y);
+                    home = [r.x, r.y];
                     
                     if (msg.type === "pilgrim_assign_target") {
                         game.log("assigning target " + msg.x + " " + msg.y);
@@ -65,11 +64,17 @@ export function turn(game, steps) {
             game.log("Pilgrim did not get a message");
         }
 
+        homemap = nav.build_map(game.map
+            , [game.me.x, game.me.y]
+            , MYSPEC.SPEED
+            , nav.GAITS.WALK
+        );
+
         targetmap = nav.build_map(
             game.map,
             target,
-            MYSPEC.SPEED,
-            nav.GAITS.RUN // in case we are in danger
+            DEFAULT_SPEED,
+            nav.GAITS.WALK // in case we are in danger
         );
     }
 
@@ -110,9 +115,11 @@ export function turn(game, steps) {
                 && game.me.fuel != MYSPEC.FUEL_CAPACITY) {
                 action = game.mine();
             } else {
-                var [nx, ny] = nav.path_step(targetmap, [game.me.x, game.me.y], 4, robots);
-
-                action = game.move(nx-game.me.x, ny-game.me.y);
+                var [nx, ny] = nav.path_step(targetmap, [game.me.x, game.me.y], DEFAULT_SPEED, robots);
+                if (nx !== game.me.x || ny !== game.me.y) { 
+                    game.log("moving to " + nx + " " + ny);
+                    action = game.move(nx-game.me.x, ny-game.me.y);
+                }
             }
         }
     }
@@ -135,10 +142,18 @@ export function turn(game, steps) {
             action = game.give(castle.x - game.me.x, castle.y - game.me.y, game.me.karbonite, game.me.fuel);
         } else {
 
-            var [nx, ny] = nav.path_step(homemap, [game.me.x, game.me.y], (state === DANGER ? 4 : 4), robots);
-            action = game.move(nx-game.me.x, ny-game.me.y);
-
+            var [nx, ny] = nav.path_step(homemap, [game.me.x, game.me.y], (state === DANGER ? 4 : DEFAULT_SPEED), robots);
+            if (nx !== game.me.x || ny !== game.me.y) { 
+                game.log("moving to " + nx + " " + ny);
+                action = game.move(nx-game.me.x, ny-game.me.y);
+            }
         }
+    }
+
+    game.log("now I'm state: " + state);
+
+    if (game.me.id == 986) {
+        nav.printmap(game, homemap);
     }
 
     return action;
