@@ -19,7 +19,7 @@ const PILGRIM_ABANDON_BUFFER = 1.10;
 // on the next turn.
 var last_target = null;
 
-// How many turns after the last time we saw a pilgram report back should we 
+// How many turns after the last time we saw a pilgrim report back should we 
 // assume it died and mark the resource expired?
 function get_expiry(dist_t, isfuel) {
     var travel = dist_t;
@@ -27,8 +27,8 @@ function get_expiry(dist_t, isfuel) {
     return (travel + mine) * PILGRIM_ABANDON_BUFFER;
 }
 
-// Scan surrounding pilgrams who have returned, identify the guy we just created, and
-// ack returning pilgrams.
+// Scan surrounding pilgrims who have returned, identify the guy we just created, and
+// ack returning pilgrims.
 function scan(game, steps) {
     game.log("scanning");
     var robots = game.getVisibleRobots();
@@ -37,12 +37,12 @@ function scan(game, steps) {
         if (!("x" in r)) {
             continue;
         }
-        // Look for pilgrams that could have been from us
+        // Look for pilgrims that could have been from us
         if (r.unit !== SPECS.PILGRIM) continue;
         if ((r.x-game.me.x)*(r.x-game.me.x) + (r.y-game.me.y)*(r.y-game.me.y) > 10) continue;
         if (!("team" in r) || r.team !== game.me.team) continue;
 
-        // Look for pilgrams that we might have last seen
+        // Look for pilgrims that we might have last seen
         if (!assigned_to[r.id]) {
             game.log("assigned " + r.id + " to " + last_target + ". othertype " + r.unit);
             if (last_target) {
@@ -99,25 +99,31 @@ export function turn(game, steps, is_castle = false) {
     cols = game.map[0].length;
 
     if (last_seen === null) {
+        var start = new Date().getTime();
         assignments = nav.null_array(game.map[0].length, game.map.length);
         last_seen = nav.null_array(game.map[0].length, game.map.length);
-        distmap_walk = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.WALK, [game.me]);
-        distmap_jog = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.JOG, [game.me]);
+        game.log("build arrays took " + (new Date().getTime() - start));
+        distmap_walk = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.WALK);
+        game.log("build walk map took " + (new Date().getTime() - start));
+        distmap_jog = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.JOG);
+        game.log("build jog map took " + (new Date().getTime() - start));
+        
         game.log("walk map: ");
         nav.printmap(game, distmap_walk);
         game.log("jog map: ");
         nav.printmap(game, distmap_jog);
         game.log("");
+        game.log("print maps took " + (new Date().getTime() - start));
     }
 
     scan(game, steps);
 
     var action = null;
 
-    // Strat right now is to just build pilgrams for mining.
+    // Strat right now is to just build pilgrims for mining.
     if (game.karbonite >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_KARBONITE) {
         if (game.fuel >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_FUEL) {
-            game.log("going to build pilgram");
+            game.log("going to build pilgrim");
             // build it, smash it
             // Maintain a list of unclaimed resources and pick the closest one
             // to send our guy to.
@@ -147,12 +153,13 @@ export function turn(game, steps, is_castle = false) {
                     // We are completely blocked
                     game.log("can't build anything because we are blocked");
                 } else {
-                    var msg = new Message("pilgram_assign_target", x, y);
+                    var msg = new Message("pilgrim_assign_target", x, y);
+                    game.log("creating new pilgram and assigning to " + x + " " + y);
                     game.log("Castle/church " + game.me.id + " sending message " + msg.encode());
-                    game.log("building pilgram (" + SPECS.PILGRIM + ") unit " + (nx-game.me.x) + " " + (ny-game.me.y));
+                    game.log("building pilgrim (" + SPECS.PILGRIM + ") unit " + (nx-game.me.x) + " " + (ny-game.me.y));
                     
                     action = game.buildUnit(SPECS.PILGRIM, nx-game.me.x, ny-game.me.y);
-                    game.signal(msg.encode(), 1);
+                    game.signal(msg.encode(), 3);
                 }
             } else game.log("couldn't find good target");
         }
