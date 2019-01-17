@@ -8,10 +8,15 @@ const MINING = 1;
 const GOING_HOME = 2;
 const DANGER = 3;
 
+const WANDERING = 0;
+const MINER = 1;
+const EXPEDITION = 2;
+
 const DEFAULT_SPEED = 4;
 
 var home;
 var state;
+var mode = WANDERING;
 var targetmap;
 var homemap;
 var target = [0, 0];
@@ -31,54 +36,8 @@ function get_adjacent_castle(robots, me) {
     return null;
 }
 
-export function turn(game, steps) {
-    game.log("I am a pilgrim state " + state + " home " + home + " target " + target);
+function mining_turn(game, steps) {
     var robots = game.getVisibleRobots();
-    if (steps === 1) {
-        game.log("Initializing");
-        state = GOING_TO_TARGET;
-
-        home = [game.me.x, game.me.y];
-
-        // Get an initialization message from castle
-        for (var i = 0; i < robots.length; i++) {
-            var r = robots[i];
-            if (!("team" in r)) return;
-            if (!("unit" in r)) return;
-            if ((r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) && r.team == game.me.team) {
-                if ("signal" in r) {
-                    var msg = decode(r.signal, game.me);
-                    
-                    game.log("Pilgrim got message " + r.signal + " type " + msg.type);
-                    game.log("Message was from " + r.unit + " " + r.x + " " + r.y);
-                    home = [r.x, r.y];
-                    
-                    if (msg.type === "pilgrim_assign_target") {
-                        game.log("assigning target " + msg.x + " " + msg.y);
-                        target = [msg.x, msg.y];
-                    }
-                }
-            }
-        };
-        
-        if (target[0] === 0 && target[1] === 0) {
-            game.log("Pilgrim did not get a message");
-        }
-
-        homemap = nav.build_map(game.map
-            , [game.me.x, game.me.y]
-            , MYSPEC.SPEED
-            , nav.GAITS.WALK
-        );
-
-        targetmap = nav.build_map(
-            game.map,
-            target,
-            DEFAULT_SPEED,
-            nav.GAITS.WALK // in case we are in danger
-        );
-    }
-
     var has_neighboring_pilgrim = false;
     var has_neighboring_attacker = false;
 
@@ -158,4 +117,94 @@ export function turn(game, steps) {
     }
 
     return action;
+}
+
+function expedition_turn(game, steps) {
+    // We move to location. We make castle. We wander around castle, waiting for instruction.
+
+    // Check if we can build him
+    if (Math.abs(game.me.x - target[0]) <= 1 && Math.abs(game.me.y - target[1]) <= 1) {
+        if (game.karbonite >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_KARBONITE && 
+            game.fuel >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_FUEL) {
+            mode = WANDERING;
+            return game.build_unit(SPECS.CHURCH, target[0] - game.me.x, target[1] - game.me.y);
+        }
+    } else {
+        var robots = game.getVisibleRobots();
+                                                                    // full steam ahead.    make sure we don't walk on the square
+        //                                                          //                     where the church is supposed to be
+        var [nx, ny] = nav.path_step(targetmap, [game.me.x, game.me.y], 4, robots.concat([{x:target[0], y:target[1]}]));
+        return game.move(nx-game.me.x, ny-game.me.y);
+    }
+}
+
+function wandering_turn(game, steps) {
+    var robots = game.getVisibleRobots();
+    game.log("Wandering");
+    state = GOING_TO_TARGET;
+
+    home = [game.me.x, game.me.y];
+
+    // Get an initialization message from castle
+    for (var i = 0; i < robots.length; i++) {
+        var r = robots[i];
+        if (!("team" in r)) return;
+        if (!("unit" in r)) return;
+        if ((r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) && r.team == game.me.team) {
+            if ("signal" in r) {
+                var msg = decode(r.signal, game.me);
+                
+                game.log("Pilgrim got message " + r.signal + " type " + msg.type);
+                game.log("Message was from " + r.unit + " " + r.x + " " + r.y);
+                home = [r.x, r.y];
+                
+                if (msg.type === "pilgrim_assign_target") {
+                    mode = MINER;
+                    game.log("assigning target " + msg.x + " " + msg.y);
+                    target = [msg.x, msg.y];
+                    
+                    homemap = nav.build_map(game.map
+                        , [game.me.x, game.me.y]
+                        , MYSPEC.SPEED
+                        , nav.GAITS.WALK
+                    );
+
+                    targetmap = nav.build_map(
+                        game.map,
+                        target,
+                        DEFAULT_SPEED,
+                        nav.GAITS.WALK // in case we are in danger
+                    );
+
+                    return mining_turn(game, steps);
+                }
+
+                if (msg.type === "pilgrim_build_church") {
+                    mode = EXPEDITION;
+                    game.log("building church at " + msg.x + " " + msg.y);
+                    target = [msg.x, msg.y];
+
+                    targetmap = nav.build_map(
+                        game.map,
+                        target,
+                        DEFAULT_SPEED,
+                        nav.GAITS.WALK // in case we are in danger
+                    );
+
+                    return expedition_turn(game, steps);
+                }
+            }
+        }
+    };
+    
+    game.log("Pilgram got an existential crisis");
+    // do nothing this turn and await instruction. TODO: find a tower and alert them that you're wandering.
+}
+
+export function turn(game, steps) {
+    game.log("I am a pilgrim state " + state + " home " + home + " target " + target);
+    if (mode === WANDERING) return wandering_turn(game, steps);
+    if (mode === MINER) return mining_turn(game, steps);
+    if (mode === EXPEDITION) return expedition_turn(game, steps);
+    throw "invalid AI mode";
 }

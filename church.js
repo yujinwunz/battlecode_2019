@@ -3,6 +3,7 @@ import * as nav from 'nav.js';
 import * as utils from 'utils.js';
 import PQ from 'priorityqueue.js';
 import {Message, decode} from 'message.js';
+import * as messages from 'message.js';
 import * as cutils from 'castleutils.js';
 
 var last_seen = null;
@@ -17,6 +18,13 @@ var rows = null, cols = null;
 
 const PILGRIM_ABANDON_BUFFER = 1.10;
 const RESOURCE_MAX_R = 36;
+
+const NEW_CASTLE_FUEL_THRESHOLD = 300;
+const NEW_CASTLE_KARBONITE_THRESHOLD = 80;
+
+var known_units = {};
+var ongoing_expeditions = {};
+var church_assignment = null;
 
 // remember where we sent the last guy off to because we can only get his id
 // on the next turn.
@@ -97,14 +105,88 @@ function get_closest_target(game, steps) {
     return best_loc;
 }
 
+function on_birth(game, id) {
+    game.log("birth " + id + " type " + cutils.unit_of_id[id]);
+}
+
+function on_msg(game, id, msg) {
+    game.log("msg " + id + " " + msg + " unit_type " + cutils.unit_of_id[id]);
+    var unit = cutils.unit_of_id[id];
+    var x = msg >> messages.COORD_BITS;
+    var y = msg & ((1<<messages.COORD_BITS)-1);
+    if (!(id in known_units)) 
+        known_units[id] = [unit, x, y];
+}
+
+function on_death(game, id) {
+    game.log("death " + id);
+    var unit = cutils.unit_of_id[id];
+    delete known_units.id;
+}
+
+function make_church_assignments(game) {
+    game.log("assigning");
+    var castles = {};
+    var existing_castles = [];
+    Object.keys(known_units).forEach(i => {
+        var [u, x, y] = known_units[i];
+        if (u === SPECS.CASTLE) {
+            castles[i] = nav.build_map(game.map, [x, y], 4, nav.GAITS.JOG);
+            existing_castles.push([x, y]);
+        }
+    });
+
+    var [churches, groups] = cutils.get_church_locations(game.map, game.karbonite_map, game.fuel_map, existing_castles, game);
+    game.log(churches);
+    game.log(groups);
+
+    church_assignment = {};
+    
+    // For every church candidate, find its closest castle.
+    churches.forEach(loc => {
+        var bestDist = [(1<<30), 0];
+        var bestid = null;
+        Object.keys(castles).sort().forEach(i => { // sort so results are same in each castle
+            var map = castles[i];
+            var dist = map[loc[1]][loc[0]];
+            if (dist != null && nav.distcmp(dist, bestDist) < 0) {
+                bestDist = dist;
+                bestid = i;
+            }
+        });
+
+        if (!(bestid in church_assignment)) church_assignment[bestid] = [];
+        church_assignment[bestid].push(loc);
+    });
+
+    church_assignment[game.me.id].sort((a, b) => // only my one should worry about distance. 
+        nav.distcmp(distmap_jog[a[1]][a[0]], distmap_jog[b[1]][b[0]])
+    );
+
+    game.log("assignments");
+    game.log(church_assignment);
+}
+
+function send_expedition(game, loc) {
+    game.log("Sending expedition to " + loc[0] + " " + loc[1]);
+}
+
 export function turn(game, steps, is_castle = false) {
-    game.log("fuel and karbs: " + game.fuel + " " + game.karbonite);
+    game.log("I am a church/castle. fuel and karbs: " + game.fuel + " " + game.karbonite);
     rows = game.map.length;
     cols = game.map[0].length;
     var robots = game.getVisibleRobots();
     game.log("Number of robots: " + robots.length);
     game.log(robots);
 
+    if (is_castle) {
+        cutils.receive(
+            robots, 
+            a=>on_birth(game, a), 
+            (a, b)=>on_msg(game, a, b), 
+            a=>on_death(game, a)
+        );
+    }
 
     if (last_seen === null) {
         var start = new Date().getTime();
@@ -114,6 +196,7 @@ export function turn(game, steps, is_castle = false) {
         distmap_jog = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.JOG);
         game.log("build maps took " + (new Date().getTime() - start));
 
+        /*
         // just testing
         var [churches, groups] = cutils.get_church_locations(game.map, game.karbonite_map, game.fuel_map, []);
         var map = utils.null_array(cols, rows);
@@ -130,7 +213,7 @@ export function turn(game, steps, is_castle = false) {
             map[y][x] += "C";
         }
         utils.print_map(game, map);
-        for (var i = 0; i < groups.length; i++) game.log(groups[i]);
+        for (var i = 0; i < groups.length; i++) game.log(groups[i]);*/
     }
 
     scan(game, steps);
@@ -168,6 +251,40 @@ export function turn(game, steps, is_castle = false) {
                 }
             } else game.log("couldn't find good target");
         }
+    }
+
+    if (is_castle && !action) {
+        // Consider creating a church somewhere.
+        if (game.karbonite >= NEW_CASTLE_KARBONITE_THRESHOLD 
+            && game.fuel >= NEW_CASTLE_FUEL_THRESHOLD
+            && steps >= 10) { // wait 5 turns so we know for sure where the castles are
+
+            if (church_assignment === null) {
+                make_church_assignments(game);
+            }
+
+            var my_churches = church_assignment[game.me.id];
+            
+            for (var i = 0; i < my_churches.length; i++) {
+                var [x, y] = my_churches[i];
+                var free = true;
+                Object.keys(ongoing_expeditions).forEach(i => {
+                    var [ox, oy] = ongoing_expeditions[j];
+                    if (x === ox && y === oy) free = false;
+                });
+                Object.keys(known_units).forEach(i => {
+                    var [ou, ox, oy] = known_units[i];
+                    if (ou === SPECS.CHURCH && ox === x && oy === y) free = false;
+                });
+
+                if (free) {
+                    action = send_expedition(game, my_churches[i]);
+                    break;
+                }
+            }
+        }
+
+        
     }
 
     game.log("doing action " + action);

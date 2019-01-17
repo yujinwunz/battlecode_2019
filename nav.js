@@ -45,7 +45,6 @@ class Queue {
         }
         return this.qs[this.first][this.pos++];
     }
-    
 }
 
 // Returns a distancemap given the target location.

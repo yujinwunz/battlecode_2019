@@ -1,17 +1,17 @@
 // Remember we get 16 bits per broadcast and 8 bits per shuffle.
 
-const TYPE_BITS = 3;
-const ID_BITS = 13;
-const COORD_BITS = 6;
+export const TYPE_BITS = 3;
+export const ID_BITS = 13;
+export const COORD_BITS = 6;
 
-const CHECKSUM_BITS = 3;
-const CHECKSUM_MASK = ((1<<CHECKSUM_BITS)-1);
-const CHECKSUM_VALUE = 0b101; // Any random value plz
+export const CHECKSUM_BITS = 3;
+export const CHECKSUM_MASK = ((1<<CHECKSUM_BITS)-1);
+export const CHECKSUM_VALUE = 0b101; // Any random value plz
 
 const TYPEMAP = {
     pilgrim_assign_target: 0b000,
     pilgrim_build_church: 0b001,
-    pilgrim_ack: 0b001,
+    pilgrim_ack: 0b000,
 };
 
 // signed messages ensure that during the chaos of battle,

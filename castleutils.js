@@ -8,6 +8,8 @@ import * as utils from 'utils.js';
 
 var cols, rows;
 
+export const MAX_ID = 4096;
+
 function dfs(map, k_map, f_map, loc, seen, res) {
     var [x, y] = loc;
     seen[y][x] = true;
@@ -125,13 +127,72 @@ export function get_church_locations(map, karbonite_map, fuel_map, existing_cast
         // don't go if it's next to an existing castle
         var ok = true;
         for (var j = 0; j < existing_castles.length; j++) {
-            var x = existing_castles[j].x;
-            var y = existing_castles[j].y;
-            if (abs(g[0] - x) <= 4 && ans(g[1] - y) <= 4) ok = false;
+            var x = existing_castles[j][0];
+            var y = existing_castles[j][1];
+            
+            if (Math.abs(g[0][0] - x) <= 4 && Math.abs(g[0][1] - y) <= 4) ok = false;
         }
 
         if (ok) churches.push(get_best_church_location(map, g));
     }
 
     return [churches, groups];
+}
+
+
+// Messaging stack. Receive multi-part messages from all other bots, and detect
+// deaths through silence.
+
+export var message_buffer = [];
+export var buffer_size    = [];
+export var expected_size  = [];
+export var unit_of_id     = [];
+
+var active_ids = new Set();
+
+for (var i = 0; i <= MAX_ID; i++) {
+    message_buffer.push(0);
+    buffer_size.push(0);
+    expected_size.push(0);
+    unit_of_id.push(null);
+}
+
+export function receive(robots, on_birth, on_msg, on_death) {
+    var seen = new Set();
+    robots.forEach(r => {
+        if ("castle_talk" in r) {
+            seen.add(r.id);
+            active_ids.add(r.id);
+            if (expected_size[r.id] === 0) {
+                // header byte
+                if (r.castle_talk !== 0) { // sometimes, units are built with
+                    // castle talk=0. But another castle is queued up before it
+                    // and reads that value before the new unit has a chance
+                    // to heartbeat. Just hack this in here. It should only affect
+                    // castles sending an empty heartbeat.
+                    var unit = r.castle_talk & 0b111;
+                    expected_size[r.id] = r.castle_talk >> 3;
+                    if (unit_of_id[r.id] === null) {
+                        unit_of_id[r.id] = unit;
+                        on_birth(r.id, unit);
+                    }
+                }
+            } else {
+                message_buffer[r.id] = message_buffer[r.id] | (r.castle_talk << (buffer_size[r.id]*8));
+                buffer_size[r.id] ++;
+                if (buffer_size[r.id] === expected_size[r.id]) {
+                    on_msg(r.id, message_buffer[r.id]);
+                    message_buffer[r.id] = 0;
+                    buffer_size[r.id] = 0;
+                    expected_size[r.id] = 0;
+                }
+            }
+        }
+    });
+
+    active_ids.forEach(i => {
+        if (!seen.has(i)) on_death(i);
+    });
+
+    active_ids = seen;
 }
