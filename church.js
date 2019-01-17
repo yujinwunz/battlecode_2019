@@ -1,7 +1,9 @@
 import {BCAbstractRobot, SPECS} from 'battlecode';
 import * as nav from 'nav.js';
+import * as utils from 'utils.js';
 import PQ from 'priorityqueue.js';
 import {Message, decode} from 'message.js';
+import * as cutils from 'castleutils.js';
 
 var last_seen = null;
 var assignments = null;
@@ -14,6 +16,7 @@ var distmap_jog = null;
 var rows = null, cols = null;
 
 const PILGRIM_ABANDON_BUFFER = 1.10;
+const RESOURCE_MAX_R = 36;
 
 // remember where we sent the last guy off to because we can only get his id
 // on the next turn.
@@ -72,6 +75,7 @@ function get_closest_target(game, steps) {
     var best_loc = [null, null];
     for (var x = 0; x < cols; x++) {
         for (var y = 0; y < rows; y++) {
+            if ((x-game.me.x)*(x-game.me.x) + (y-game.me.y)*(y-game.me.y) > RESOURCE_MAX_R) continue;
             if (kmap[y][x] || fmap[y][x]) {
                 if (!game.map[y][x]) {
                     game.log("Error: resource in unpassable square");
@@ -97,23 +101,36 @@ export function turn(game, steps, is_castle = false) {
     game.log("fuel and karbs: " + game.fuel + " " + game.karbonite);
     rows = game.map.length;
     cols = game.map[0].length;
+    var robots = game.getVisibleRobots();
+    game.log("Number of robots: " + robots.length);
+    game.log(robots);
+
 
     if (last_seen === null) {
         var start = new Date().getTime();
-        assignments = nav.null_array(game.map[0].length, game.map.length);
-        last_seen = nav.null_array(game.map[0].length, game.map.length);
-        game.log("build arrays took " + (new Date().getTime() - start));
+        assignments = utils.null_array(game.map[0].length, game.map.length);
+        last_seen = utils.null_array(game.map[0].length, game.map.length);
         distmap_walk = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.WALK);
-        game.log("build walk map took " + (new Date().getTime() - start));
         distmap_jog = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.JOG);
-        game.log("build jog map took " + (new Date().getTime() - start));
-        
-        game.log("walk map: ");
-        nav.printmap(game, distmap_walk);
-        game.log("jog map: ");
-        nav.printmap(game, distmap_jog);
-        game.log("");
-        game.log("print maps took " + (new Date().getTime() - start));
+        game.log("build maps took " + (new Date().getTime() - start));
+
+        // just testing
+        var [churches, groups] = cutils.get_church_locations(game.map, game.karbonite_map, game.fuel_map, []);
+        var map = utils.null_array(cols, rows);
+        for (var x = 0; x < cols; x++) {
+            for (var y = 0; y < rows; y++) {
+                map[y][x] = "";
+                if (!game.map[y][x]) map[y][x] = "#";
+                if (game.karbonite_map[y][x]) map[y][x] += "*";
+                if (game.fuel_map[y][x]) map[y][x] += ".";
+            }
+        }
+        for (var i = 0; i < churches.length; i++) {
+            var [x, y] = churches[i];
+            map[y][x] += "C";
+        }
+        utils.print_map(game, map);
+        for (var i = 0; i < groups.length; i++) game.log(groups[i]);
     }
 
     scan(game, steps);
@@ -131,24 +148,12 @@ export function turn(game, steps, is_castle = false) {
             if (x !== null) {
                 last_target = [x, y];
                 game.log("found closest target: " + x + " " + y);
-                var robots = game.getVisibleRobots();
                 for (var i = 0; i < robots.length; i++) {
                     game.log(robots[i]);
                 }
                 var getthere = nav.build_map(game.map, [x, y], 4, nav.GAITS.JOG, robots); 
-                for (var iy = Math.max(0, game.me.y - 10); iy < Math.min(rows, game.me.y + 11); iy++) {
-                    var rep = "";
-                    for (var ix = Math.max(0, game.me.x-10); ix < Math.min(cols, game.me.x+11); ix++) {
-                        rep += getthere[iy][ix];
-                        if (iy === game.me.y && ix === game.me.x) rep += "*";
-                        else rep += " ";
-                        while (rep.length % 10 != 8) rep += " ";
-                    }
-                    game.log(rep);
-                }
                 var [nx, ny] = nav.path_step(getthere, [game.me.x, game.me.y], 3); // 3 signals 8-adjacent.
                 game.log("next step: " + nx + " " + ny);
-                game.log("");
                 if (nx === null) {
                     // We are completely blocked
                     game.log("can't build anything because we are blocked");

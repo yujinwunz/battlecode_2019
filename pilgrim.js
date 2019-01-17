@@ -1,6 +1,7 @@
 import {BCAbstractRobot, SPECS} from 'battlecode';
 import {Message, decode} from 'message.js';
 import * as nav from 'nav.js';
+import * as utils from 'utils.js';
 
 const GOING_TO_TARGET = 0;
 const MINING = 1;
@@ -153,7 +154,7 @@ export function turn(game, steps) {
     game.log("now I'm state: " + state);
 
     if (game.me.id == 986) {
-        nav.printmap(game, homemap);
+        utils.print_map(game, homemap);
     }
 
     return action;

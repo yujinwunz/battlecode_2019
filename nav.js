@@ -1,5 +1,5 @@
 import PQ from './priorityqueue';
-import * as util from 'util.js';
+import * as utils from 'utils.js';
 
 export const ADJACENT = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
 
@@ -13,17 +13,6 @@ export const GAITS = {
 
 var EPS = 1e-10;
 
-export function null_array(cols, rows) {
-    var map = [];
-    for (var i = 0; i < rows; i++) {
-        var toadd = [];
-        for (var j = 0; j < cols; j++) {
-            toadd.push(null);
-        }
-        map.push(toadd);
-    }
-    return map;
-}
 
 export function distcmp(a, b) {
     if (a[0] === b[0]) return a[1] - b[1];
@@ -92,7 +81,7 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[]) {
     dij.push([0, 0, tx, ty]);
     
 
-    var res = null_array(cols, rows);
+    var res = utils.null_array(cols, rows);
 
     var root=Math.ceil(Math.sqrt(max_jump)-EPS);
     while (dij.length) {
@@ -178,17 +167,3 @@ export function path_step(map, from, step, robots=[]) {
     return bestto;
 }
 
-export function printmap(console, map) {
-    var rows = map.length;
-    var cols = map[0].length;
-
-    for (var y = 0; y < rows; y++) {
-        var p = "";
-        for (var x = 0; x < rows; x++) {
-            var t = "" + map[y][x];
-            while (t.length < 6) t += " ";
-            p += t;
-        }
-        console.log(p);
-    }
-}
