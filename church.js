@@ -15,6 +15,7 @@ var distmap_walk = null;
 var distmap_jog = null;
 
 var rows = null, cols = null;
+var first_pilgrim = true;
 
 const PILGRIM_ABANDON_BUFFER = 1.10;
 const RESOURCE_MAX_R = 36;
@@ -23,7 +24,7 @@ const NEW_CASTLE_FUEL_THRESHOLD = 300;
 const NEW_CASTLE_KARBONITE_THRESHOLD = 80;
 
 var known_units = {};
-var ongoing_expeditions = {};
+// var ongoing_expeditions = {}; // Merged with assigned_to.
 var church_assignment = null;
 
 // remember where we sent the last guy off to because we can only get his id
@@ -120,6 +121,10 @@ function on_msg(game, id, msg) {
 
 function on_death(game, id) {
     game.log("death " + id);
+    if (id in assigned_to) {
+        last_seen[assigned_to[id][1]][assigned_to[id][0]] = null;
+        delete assigned_to.id;
+    }
     var unit = cutils.unit_of_id[id];
     delete known_units.id;
 }
@@ -167,8 +172,21 @@ function make_church_assignments(game) {
     game.log(church_assignment);
 }
 
+// An expedition is just sending a pilgrim out like sending them out for resources.
+// Only difference: if it dies we do remove it from current expeditions.
 function send_expedition(game, loc) {
     game.log("Sending expedition to " + loc[0] + " " + loc[1]);
+
+    last_target = [loc[0], loc[1]];
+    var msg = new Message("pilgrim_build_church", loc[0], loc[1]);
+    game.signal(msg.encode(), 3);
+
+    // Find free spot
+    var getthere = nav.build_map(game.map, loc, 4, nav.GAITS.JOG, game.getVisibleRobots()); 
+    var [nx, ny] = nav.path_step(getthere, [game.me.x, game.me.y], 3); // 3 signals 8-adjacent.
+
+    if (nx === null) game.loc("can't build expedition - caked in");
+    else return game.buildUnit(SPECS.PILGRIM, nx-game.me.x, ny-game.me.y);
 }
 
 export function turn(game, steps, is_castle = false) {
@@ -223,7 +241,7 @@ export function turn(game, steps, is_castle = false) {
     // Strat right now is to just build pilgrims for mining.
     if (game.karbonite >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_KARBONITE) {
         if (game.fuel >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_FUEL) {
-            game.log("going to build pilgrim");
+            game.log("going to obtain resources");
             // build it, smash it
             // Maintain a list of unclaimed resources and pick the closest one
             // to send our guy to.
@@ -245,11 +263,16 @@ export function turn(game, steps, is_castle = false) {
                     game.log("creating new pilgram and assigning to " + x + " " + y);
                     game.log("Castle/church " + game.me.id + " sending message " + msg.encode());
                     game.log("building pilgrim (" + SPECS.PILGRIM + ") unit " + (nx-game.me.x) + " " + (ny-game.me.y));
-                    
-                    action = game.buildUnit(SPECS.PILGRIM, nx-game.me.x, ny-game.me.y);
+                    if (!first_pilgrim || is_castle) { // churches are built by a pilgram
+                        // which would already be waiting for its instruction. So churches
+                        // dont' have to build their first pilgram, just assume the guy's
+                        // loyally there.
+                        action = game.buildUnit(SPECS.PILGRIM, nx-game.me.x, ny-game.me.y);
+                    }
+                    first_pilgrim = false;
                     game.signal(msg.encode(), 3);
                 }
-            } else game.log("couldn't find good target");
+            } else game.log("All resources are being mined");
         }
     }
 
@@ -268,8 +291,8 @@ export function turn(game, steps, is_castle = false) {
             for (var i = 0; i < my_churches.length; i++) {
                 var [x, y] = my_churches[i];
                 var free = true;
-                Object.keys(ongoing_expeditions).forEach(i => {
-                    var [ox, oy] = ongoing_expeditions[j];
+                Object.keys(assigned_to).forEach(j => {
+                    var [ox, oy] = assigned_to[j];
                     if (x === ox && y === oy) free = false;
                 });
                 Object.keys(known_units).forEach(i => {

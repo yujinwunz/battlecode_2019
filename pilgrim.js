@@ -127,7 +127,7 @@ function expedition_turn(game, steps) {
         if (game.karbonite >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_KARBONITE && 
             game.fuel >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_FUEL) {
             mode = WANDERING;
-            return game.build_unit(SPECS.CHURCH, target[0] - game.me.x, target[1] - game.me.y);
+            return game.buildUnit(SPECS.CHURCH, target[0] - game.me.x, target[1] - game.me.y);
         }
     } else {
         var robots = game.getVisibleRobots();
