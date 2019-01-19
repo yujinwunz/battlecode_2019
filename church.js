@@ -6,12 +6,11 @@ import {Message, decode} from 'message.js';
 import * as messages from 'message.js';
 import * as cutils from 'castleutils.js';
 
-var last_seen = null;
 var assignments = null;
 
 var assigned_to = {};
 
-var distmap_walk = null;
+//var distmap_walk = null;
 var distmap_jog = null;
 
 var rows = null, cols = null;
@@ -22,6 +21,8 @@ const RESOURCE_MAX_R = 36;
 
 const NEW_CASTLE_FUEL_THRESHOLD = 300;
 const NEW_CASTLE_KARBONITE_THRESHOLD = 80;
+
+const MAX_FARM_DIST = 5;
 
 var known_units = {};
 // var ongoing_expeditions = {}; // Merged with assigned_to.
@@ -59,14 +60,12 @@ function scan(game, steps) {
             game.log("assigned " + r.id + " to " + last_target + ". othertype " + r.unit);
             if (last_target) {
                 assignments[last_target[1]][last_target[0]] = r.id;
-                last_seen[last_target[1]][last_target[0]] = steps;
                 assigned_to[r.id] = last_target;
                 last_target = null;
             }
         } else {
             var [x, y] = assigned_to[r.id];
             game.log(r.id + " was already assigned to " + x + " " + y);
-            last_seen[y][x] = steps;
         }
     }
 
@@ -90,9 +89,8 @@ function get_closest_target(game, steps) {
                     game.log("Error: resource in unpassable square");
                     continue;
                 }
-                if (last_seen[y][x] == null || 
-                    last_seen[y][x] + get_expiry(distmap_walk[y][x], fmap[y][x]) < steps) {
-                    game.log("resource expired: " + y + " " + x + " " + last_seen[y][x]);
+                if (assignments[y][x] === null) {
+                    game.log("resource expired: " + y + " " + x);
                     // Found an expired or unused resource
                     if (nav.distcmp(distmap_jog[y][x], best_dist) < 0) {
                         best_dist = distmap_jog[y][x];
@@ -122,15 +120,19 @@ function on_msg(game, id, msg) {
 function on_death(game, id) {
     game.log("death " + id);
     if (id in assigned_to) {
-        last_seen[assigned_to[id][1]][assigned_to[id][0]] = null;
-        delete assigned_to.id;
+        game.log("removing assignment for " + id + " to " + assigned_to[id][0] + " " + assigned_to[id][1]);
+        assignments[assigned_to[id][1]][assigned_to[id][0]] = null;
+        game.log(assigned_to);
+        delete assigned_to[id];
+        game.log(assigned_to);
     }
     var unit = cutils.unit_of_id[id];
-    delete known_units.id;
+    delete known_units[id];
 }
 
 function make_church_assignments(game) {
     game.log("assigning");
+    game.log("known castles:");
     var castles = {};
     var existing_castles = [];
     Object.keys(known_units).forEach(i => {
@@ -140,6 +142,7 @@ function make_church_assignments(game) {
             existing_castles.push([x, y]);
         }
     });
+    game.log(existing_castles);
 
     var [churches, groups] = cutils.get_church_locations(game.map, game.karbonite_map, game.fuel_map, existing_castles, game);
     game.log(churches);
@@ -185,8 +188,29 @@ function send_expedition(game, loc) {
     var getthere = nav.build_map(game.map, loc, 4, nav.GAITS.JOG, game.getVisibleRobots()); 
     var [nx, ny] = nav.path_step(getthere, [game.me.x, game.me.y], 3); // 3 signals 8-adjacent.
 
-    if (nx === null) game.loc("can't build expedition - caked in");
+    if (nx === null) game.log("can't build expedition - caked in");
     else return game.buildUnit(SPECS.PILGRIM, nx-game.me.x, ny-game.me.y);
+}
+
+function get_attackable_enemies(game, robots) {
+    var ret = [];
+    robots.forEach(a => {
+        if (!("unit" in a)) return;
+        if (!("team" in a)) return;
+        if (!("x" in a)) return;
+        if (a.team == game.me.team) return;
+        var dis = (game.me.x - a.x) * (game.me.x - a.x) + (game.me.y - a.y) * (game.me.y - a.y);
+        if (dis <= SPECS.UNITS[SPECS.CASTLE].ATTACK_RADIUS[1]) ret.push(a);
+    });
+    return ret;
+}
+
+function threat_level(game, r) {
+    var hp = r.health;
+    var hp_per_hit = SPECS.UNITS[r.unit].ATTACK_DAMAGE / r.health;
+    var in_range = (game.me.x - r.x) * (game.me.x - r.x) + (game.me.y - r.y) * (game.me.y - r.y) <= SPECS.UNITS[r.unit].ATTACK_RANGE;
+
+    return (in_range<<10) | (hp_per_hit << 5) | hp;
 }
 
 export function turn(game, steps, is_castle = false) {
@@ -197,20 +221,11 @@ export function turn(game, steps, is_castle = false) {
     game.log("Number of robots: " + robots.length);
     game.log(robots);
 
-    if (is_castle) {
-        cutils.receive(
-            robots, 
-            a=>on_birth(game, a), 
-            (a, b)=>on_msg(game, a, b), 
-            a=>on_death(game, a)
-        );
-    }
 
-    if (last_seen === null) {
-        var start = new Date().getTime();
+    var start = new Date().getTime();
+    if (assignments === null) {
         assignments = utils.null_array(game.map[0].length, game.map.length);
-        last_seen = utils.null_array(game.map[0].length, game.map.length);
-        distmap_walk = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.WALK);
+        //distmap_walk = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.WALK);
         distmap_jog = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.JOG);
         game.log("build maps took " + (new Date().getTime() - start));
 
@@ -234,13 +249,35 @@ export function turn(game, steps, is_castle = false) {
         for (var i = 0; i < groups.length; i++) game.log(groups[i]);*/
     }
 
+    var action = null;
     scan(game, steps);
 
-    var action = null;
+    if (is_castle) {
+        cutils.receive(
+            robots, 
+            a=>on_birth(game, a), 
+            (a, b)=>on_msg(game, a, b), 
+            a=>on_death(game, a)
+        );
 
+        // Attack visible enemies
+        var enemies = get_attackable_enemies(game, robots);
+        game.log("enemies:");
+        game.log(enemies);
+        enemies.sort((a, b) => -(threat_level(game, a) - threat_level(game, b)));
+
+        if (enemies.length) {
+            game.log("attacking " + enemies[0].id);
+            action = game.attack(enemies[0].x - game.me.x, enemies[0].y - game.me.y);
+        }
+    }
+
+    game.log("Attacking animemes took " + (new Date().getTime() - start));
+
+    if (action === null) { // so we're not able to fight the fight
     // Strat right now is to just build pilgrims for mining.
-    if (game.karbonite >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_KARBONITE) {
-        if (game.fuel >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_FUEL) {
+        if (game.karbonite >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_KARBONITE &&
+            game.fuel >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_FUEL) {
             game.log("going to obtain resources");
             // build it, smash it
             // Maintain a list of unclaimed resources and pick the closest one
@@ -252,7 +289,9 @@ export function turn(game, steps, is_castle = false) {
                 for (var i = 0; i < robots.length; i++) {
                     game.log(robots[i]);
                 }
-                var getthere = nav.build_map(game.map, [x, y], 4, nav.GAITS.JOG, robots); 
+                game.log("before build map for pilgrim took " + (new Date().getTime() - start));
+                var getthere = nav.build_map(game.map, [x, y], 4, nav.GAITS.JOG, robots, MAX_FARM_DIST); 
+                game.log("build map for pilgrim took " + (new Date().getTime() - start));
                 var [nx, ny] = nav.path_step(getthere, [game.me.x, game.me.y], 3); // 3 signals 8-adjacent.
                 game.log("next step: " + nx + " " + ny);
                 if (nx === null) {
@@ -276,8 +315,10 @@ export function turn(game, steps, is_castle = false) {
         }
     }
 
-    if (is_castle && !action) {
-        // Consider creating a church somewhere.
+    game.log("building pilgrims took " + (new Date().getTime() - start));
+
+    if (is_castle && action === null) {
+        // Consider building a church somewhere.
         if (game.karbonite >= NEW_CASTLE_KARBONITE_THRESHOLD 
             && game.fuel >= NEW_CASTLE_FUEL_THRESHOLD
             && steps >= 10) { // wait 5 turns so we know for sure where the castles are
@@ -287,17 +328,24 @@ export function turn(game, steps, is_castle = false) {
             }
 
             var my_churches = church_assignment[game.me.id];
+            if (!my_churches) my_churches = [];
             
             for (var i = 0; i < my_churches.length; i++) {
                 var [x, y] = my_churches[i];
                 var free = true;
                 Object.keys(assigned_to).forEach(j => {
                     var [ox, oy] = assigned_to[j];
-                    if (x === ox && y === oy) free = false;
+                    if (x === ox && y === oy) {
+                        free = false;
+                        game.log("cannot build church at " + x + " " + y + " since it's assigned to " + ox + " " + oy + " id " + j);
+                    }
                 });
-                Object.keys(known_units).forEach(i => {
-                    var [ou, ox, oy] = known_units[i];
-                    if (ou === SPECS.CHURCH && ox === x && oy === y) free = false;
+                Object.keys(known_units).forEach(j => {
+                    var [ou, ox, oy] = known_units[j];
+                    if (ou === SPECS.CHURCH && ox === x && oy === y) {
+                        free = false;
+                        game.log("cannot build church at " + x + " " + y + " since we've got a unit at " + ox + " " + oy + " type " + ou + " id " + j);
+                    }
                 });
 
                 if (free) {
@@ -305,11 +353,10 @@ export function turn(game, steps, is_castle = false) {
                     break;
                 }
             }
-        }
-
-        
+        } 
     }
 
+    game.log("build church took " + (new Date().getTime() - start));
     game.log("doing action " + action);
     return action;
 }

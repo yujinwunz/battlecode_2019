@@ -14,7 +14,7 @@ const TYPEMAP = {
     pilgrim_assign_target: 0b000,
     pilgrim_build_church: 0b001,
 
-    requesting_backup: 0b002,
+    requesting_backup: 0b010,
 };
 
 // signed messages ensure that during the chaos of battle,

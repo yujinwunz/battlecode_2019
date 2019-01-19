@@ -47,29 +47,17 @@ class Queue {
     }
 }
 
-// Returns a distancemap given the target location.
-export function build_map(pass_map, target, max_jump=4, gait=0, robots=[]) {
+// Returns a distancemap given the target location. Set max_t for small localized dfs's.
+export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t=(1<<30)) {
     var [tx, ty] = target;
     var rows = pass_map.length;
     var cols = pass_map[0].length;
 
-    if (robots) {
-        var map = [];
-        for (var y = 0; y < rows; y++) {
-            map.push(pass_map[y].slice());
-        }
-        
-        for (var i = 0; i < robots.length; i++) {
-            var r = robots[i];
+    robots.forEach(r => {
             if ("x" in r) {
-                map[r.y][r.x] = false; // block visible robots
+                pass_map[r.y][r.x] = false; // block visible robots
             }
-        }
-
-        pass_map = map;
-        pass_map[ty][tx] = true; // in case destination is an occupied square. At least allow
-                                 // searching.
-    }
+    })
 
     let dij = new Queue(); /* new PQ(
         [[0, 0, tx, ty]], 
@@ -87,6 +75,7 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[]) {
         var [f, t, x, y] = dij.pop();
 
         if (res[y][x] !== null) continue;
+        if (t > max_t) continue;
         res[y][x] = [f, t];
 
         for (var dx = -root; dx <= +root; dx++) {
@@ -103,6 +92,12 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[]) {
             }
         }
     }
+
+    robots.forEach(r => {
+            if ("x" in r) {
+                pass_map[r.y][r.x] = true; // block visible robots
+            }
+    })
 
     return res;
 }
