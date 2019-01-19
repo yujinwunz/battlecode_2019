@@ -3,7 +3,7 @@
         "nav_test": "node nav_test.js"
     },
     "dependencies": {
-        "bc19": "^0.3.20"
+        "bc19": "^0.3.23"
     },
     "devDependencies": {
         "babel-preset-env": "^1.7.0",

@@ -189,7 +189,7 @@ function send_expedition(game, loc) {
     var [nx, ny] = nav.path_step(getthere, [game.me.x, game.me.y], 3); // 3 signals 8-adjacent.
 
     if (nx === null) game.log("can't build expedition - caked in");
-    else return game.buildUnit(SPECS.PILGRIM, nx-game.me.x, ny-game.me.y);
+    else return game.buildUnit(SPECS.CRUSADER, nx-game.me.x, ny-game.me.y);
 }
 
 function get_attackable_enemies(game, robots) {
@@ -203,14 +203,6 @@ function get_attackable_enemies(game, robots) {
         if (dis <= SPECS.UNITS[SPECS.CASTLE].ATTACK_RADIUS[1]) ret.push(a);
     });
     return ret;
-}
-
-function threat_level(game, r) {
-    var hp = r.health;
-    var hp_per_hit = SPECS.UNITS[r.unit].ATTACK_DAMAGE / r.health;
-    var in_range = (game.me.x - r.x) * (game.me.x - r.x) + (game.me.y - r.y) * (game.me.y - r.y) <= SPECS.UNITS[r.unit].ATTACK_RANGE;
-
-    return (in_range<<10) | (hp_per_hit << 5) | hp;
 }
 
 export function turn(game, steps, is_castle = false) {
@@ -228,25 +220,6 @@ export function turn(game, steps, is_castle = false) {
         //distmap_walk = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.WALK);
         distmap_jog = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.JOG);
         game.log("build maps took " + (new Date().getTime() - start));
-
-        /*
-        // just testing
-        var [churches, groups] = cutils.get_church_locations(game.map, game.karbonite_map, game.fuel_map, []);
-        var map = utils.null_array(cols, rows);
-        for (var x = 0; x < cols; x++) {
-            for (var y = 0; y < rows; y++) {
-                map[y][x] = "";
-                if (!game.map[y][x]) map[y][x] = "#";
-                if (game.karbonite_map[y][x]) map[y][x] += "*";
-                if (game.fuel_map[y][x]) map[y][x] += ".";
-            }
-        }
-        for (var i = 0; i < churches.length; i++) {
-            var [x, y] = churches[i];
-            map[y][x] += "C";
-        }
-        utils.print_map(game, map);
-        for (var i = 0; i < groups.length; i++) game.log(groups[i]);*/
     }
 
     var action = null;
@@ -264,7 +237,7 @@ export function turn(game, steps, is_castle = false) {
         var enemies = get_attackable_enemies(game, robots);
         game.log("enemies:");
         game.log(enemies);
-        enemies.sort((a, b) => -(threat_level(game, a) - threat_level(game, b)));
+        enemies.sort((a, b) => -(utils.threat_level(game, a) - utils.threat_level(game, b)));
 
         if (enemies.length) {
             game.log("attacking " + enemies[0].id);
