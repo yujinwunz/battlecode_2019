@@ -7,9 +7,6 @@ export const VERTICAL = 0;
 export const HORIZONTAL = 1;
 
 export const SQUAD_CAUTION_DIST = 36;
-export const MARCH_GAP = 2;
-export const ORBIT_DIST_CASTLE = 16;
-export const ORBIT_DIST_MOBILE = 4;
 
 export function bitCount (n) {
   n = n - ((n >> 1) & 0x55555555)
@@ -188,7 +185,7 @@ export function robots_collide(robots, coord) {
     return false;
 }
 
-export function call_for_backup(game, strength) {
+export function call_for_backup(game, strength, filter) {
     // gradually expand until we find X units.
     var robots = game.getVisibleRobots();
     var vision = SPECS.UNITS[game.me.unit].VISION_RADIUS;
@@ -197,9 +194,7 @@ export function call_for_backup(game, strength) {
 
     robots.forEach(r => {
         if (r.team !== game.me.team) return;
-        if (r.unit !== SPECS.CRUSADER 
-            && r.unit !== SPECS.PROPHET 
-            && r.unit !== SPECS.PREACHER) return;
+        if (!(filter & (1<<r.unit))) return;
         var dist = (r.x-game.me.x)*(r.x-game.me.x) + (r.y-game.me.y)*(r.y-game.me.y);
         cnt_by_dist[Math.min(dist, vision+1)] ++;
     });
@@ -211,7 +206,7 @@ export function call_for_backup(game, strength) {
 
     for (var i = 0; i <= vision+1; i++) {
         if (cnt_by_dist[i] >= targetn) {
-            var msg = new Message("requesting_backup");
+            var msg = new Message("requesting_backup", filter);
             if (i === vision+1) i = vision*2;
             var success = game.fuel >= Math.ceil(Math.sqrt(i));
             game.signal(msg.encode(game.me.id), i);
@@ -220,4 +215,29 @@ export function call_for_backup(game, strength) {
     }
 
     throw "shouldn't be here";
+}
+
+export function any_free_neighbour(game) {
+    var cols = game.map[0].length;
+    var rows = game.map.length;
+    var robots = game.getVisibleRobots();
+    for (var nx = Math.max(0, game.me.x-1); nx <= Math.min(cols-1, game.me.x+1); nx++) {
+        for (var ny = Math.max(0, game.me.y-1); ny <= Math.min(rows-1, game.me.y+1); ny++) {
+            if (nx === game.me.x && ny === game.me.y) continue;
+            if (game.map[ny][nx] === false) continue;
+            var collide = false;
+            robots.forEach(r => {
+                if (r.x === nx && r.y === ny) collide = true;
+            });
+            if (!collide) return [nx, ny];
+        }
+    }
+    return [null, null];
+}
+
+export function arrcmp(a, b) {
+    for (var i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return a[i] - b[i];
+    }
+    return 0;
 }

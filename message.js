@@ -8,6 +8,8 @@ export const CHECKSUM_BITS = 4;
 export const CHECKSUM_MASK = ((1<<CHECKSUM_BITS)-1);
 export const CHECKSUM_VALUE = 0b0101; // Any random value plz
 
+export const UNIT_FILTER_BITS = 6;
+
 export const SEED_BITS = 9;
 
 const TYPEMAP = {
@@ -55,7 +57,7 @@ export class Message {
             this.x = arguments[1];
             this.y = arguments[2];
         } else if (this.type === "requesting_backup") {
-            // No parameters for now
+            this.filter = arguments[1];
         } else if (this.type === "void" || this.type === "void_signature") {
             // Message from other team or malformed message
         } else {
@@ -74,8 +76,8 @@ export class Message {
         if (this.type === "pilgrim_assign_target" || this.type === "pilgrim_build_church") {
             msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
-        } else if (this.type === "request_backup") {
-            msg |= (this.signature << (16 - TYPE_BITS - SEED_BITS));
+        } else if (this.type === "requesting_backup") {
+            msg |= (this.filter << (16 - TYPE_BITS - UNIT_FILTER_BITS));
         }
 
         if (SIGNEDMAP[this.signed]) {
@@ -105,7 +107,8 @@ export function decode(rawmsg, frombot) {
         msg = new Message("pilgrim_build_church", x, y);
         signed = false;
     } else if (type === TYPEMAP.requesting_backup) {
-        msg = new Message("requesting_backup");
+        var [filter, rawmsg] = eat_msg(rawmsg, UNIT_FILTER_BITS);
+        msg = new Message("requesting_backup", filter);
     } else {
         // invalid typecode, perhaps from enemy
         return new Message("void");

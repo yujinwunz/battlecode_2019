@@ -85,12 +85,16 @@ function mining_turn(game, steps) {
     }
 
     if (state === MINING) {
-        if (game.karbonite_map[game.me.y][game.me.x] && game.me.karbonite === MYSPEC.KARBONITE_CAPACITY) {
-            state = GOING_HOME;
-        } else if (game.fuel_map[game.me.y][game.me.x] && game.me.fuel === MYSPEC.FUEL_CAPACITY) {
-            state = GOING_HOME;
-        } else {
-            action = game.mine();
+        var [in_range, exposed, confront, other, friendly, _] = utils.look(game, 0);
+        if (exposed.length) state = DANGER; // See an enemy? Go home
+        else {
+            if (game.karbonite_map[game.me.y][game.me.x] && game.me.karbonite === MYSPEC.KARBONITE_CAPACITY) {
+                state = GOING_HOME;
+            } else if (game.fuel_map[game.me.y][game.me.x] && game.me.fuel === MYSPEC.FUEL_CAPACITY) {
+                state = GOING_HOME;
+            } else {
+                action = game.mine();
+            }
         }
     }
 
@@ -103,6 +107,9 @@ function mining_turn(game, steps) {
         } else {
 
             var [nx, ny] = nav.path_step(homemap, [game.me.x, game.me.y], (state === DANGER ? 4 : DEFAULT_SPEED), robots);
+            if (nx === null) {
+                utils.print_map(game, homemap);
+            }
             if (nx !== game.me.x || ny !== game.me.y) { 
                 game.log("moving to " + nx + " " + ny);
                 action = game.move(nx-game.me.x, ny-game.me.y);
@@ -159,15 +166,15 @@ function wandering_turn(game, steps) {
                 
                 game.log("Pilgrim got message " + r.signal + " type " + msg.type);
                 game.log("Message was from " + r.unit + " " + r.x + " " + r.y);
-                home = [r.x, r.y];
                 
                 if (msg.type === "pilgrim_assign_target") {
                     mode = MINER;
                     game.log("assigning target " + msg.x + " " + msg.y);
                     target = [msg.x, msg.y];
+                    home = [r.x, r.y];
                     
                     homemap = nav.build_map(game.map
-                        , [game.me.x, game.me.y]
+                        , home
                         , MYSPEC.SPEED
                         , nav.GAITS.WALK
                     );
@@ -186,6 +193,7 @@ function wandering_turn(game, steps) {
                     mode = EXPEDITION;
                     game.log("building church at " + msg.x + " " + msg.y);
                     target = [msg.x, msg.y];
+                    home = [r.x, r.y];
 
                     targetmap = nav.build_map(
                         game.map,
@@ -194,7 +202,7 @@ function wandering_turn(game, steps) {
                         nav.GAITS.WALK // in case we are in danger
                     );
 
-                    utils.call_for_backup(game, 2); // get 2 crusaiders to escort you
+                    utils.call_for_backup(game, 2, (1<<SPECS.CRUSADER)); // get 2 crusaiders to escort you
                     //return expedition_turn(game, steps); 
                     // Don't do the step immediately because call_for_backup needs to stay put
                 }

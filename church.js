@@ -26,6 +26,13 @@ const NEW_CASTLE_FUEL_THRESHOLD = 500;
 const NEW_CASTLE_KARBONITE_THRESHOLD = 120;
 
 const MAX_FARM_DIST = 5;
+const REINFORCEMENT_PERIOD = 20;
+const REINFORCEMENT_MIN_KARBONITE = 100;
+const MIN_CASTLE_REINFORCEMENTS = 6;
+const REINFORCEMENT_MAX_DIST = 100;
+const CRUSAIDER_PROTEC = 1;
+const PROPHET_PROTEC = 2;
+const PREACHER_PROTEC = 3;
 
 var known_units = {};
 // var ongoing_expeditions = {}; // Merged with assigned_to.
@@ -209,17 +216,8 @@ function process_building_queue(game) {
         action = game.buildUnit(unit, nx-game.me.x, ny-game.me.y);
     } else {
         // Find any spot
-        for (var nx = Math.max(0, game.me.x-1); nx <= Math.min(cols-1, game.me.x+1); nx++) {
-            for (var ny = Math.max(0, game.me.y-1); ny <= Math.min(rows-1, game.me.y+1); ny++) {
-                if (nx === game.me.x && ny === game.me.y) continue;
-                if (game.map[ny][nx] === false) continue;
-                var collide = false;
-                robots.forEach(r => {
-                    if (r.x === nx && r.y === ny) collide = true;
-                });
-                if (!collide) action = game.buildUnit(unit, nx-game.me.x, ny-game.me.y);
-            }
-        }
+        var [nx, ny] = utils.any_free_neighbour(game); 
+        if (nx !== null) action = game.buildUnit(unit, nx-game.me.x, ny-game.me.y);
     }
 
     if (action) {
@@ -381,11 +379,32 @@ export function turn(game, steps, is_castle = false) {
         action = process_building_queue(game);
     }
 
+    // Randomly spawn some reinforcements
+    if (action === null) {
+        var num_reinforcements = 0;
+        var [_, _, _, _, friendly, _] = utils.look(game, 0);
+        friendly.forEach(r => {
+            if (utils.dist([r.x, r.y], [game.me.x, game.me.y]) <= REINFORCEMENT_MAX_DIST) {
+                if (r.unit === SPECS.CRUSAIDER) num_reinforcements += CRUSAIDER_PROTEC;
+                if (r.unit === SPECS.PROPHET) num_reinforcements += PROPHET_PROTEC;
+                if (r.unit === SPECS.PREACHER) num_reinforcements += PREACHER_PROTEC;
+            }
+        });
+        if (steps % REINFORCEMENT_PERIOD === game.me.id % REINFORCEMENT_PERIOD &&
+            game.karbonite >= REINFORCEMENT_MIN_KARBONITE ||
+            (is_castle && num_reinforcements < MIN_CASTLE_REINFORCEMENTS)) {
+            var [nx, ny] = utils.any_free_neighbour(game);
+            if (nx !== null) {
+                action = game.buildUnit(SPECS.PROPHET, nx-game.me.x, ny-game.me.y);
+            }
+        }
+    }
+
     if (!backup_requested && !is_castle && !action && steps != 1) {
         // a pilgrim built us. We just booted. So we should ask the pilgrim's reinforcements
         // to cover us instead.
         game.log("Requesting backup");
-        backup_requested = utils.call_for_backup(game, 2); 
+        backup_requested = utils.call_for_backup(game, 2, (1<<SPECS.CRUSAIDER)); 
         game.log("Result: " + backup_requested);
     }
 
