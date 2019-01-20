@@ -7,7 +7,8 @@ export const HORIZONTAL = 1;
 
 export const SQUAD_CAUTION_DIST = 36;
 export const MARCH_GAP = 2;
-export const ORBIT_DIST = 16;
+export const ORBIT_DIST_CASTLE = 16;
+export const ORBIT_DIST_MOBILE = 4;
 
 export function bitCount (n) {
   n = n - ((n >> 1) & 0x55555555)
@@ -107,9 +108,10 @@ export function dist(a, b) {
 }
 
 export function in_fire_range(type, dist) {
-    if (!SPECS[type].ATTACK_RADIUS) return false;
-    if (dist < SPECS[type].ATTACK_RADIUS[0]) return false; 
-    if (dist > SPECS[type].ATTACK_RADIUS[1]) return false;
+    if (!SPECS.UNITS[type]) return false;
+    if (!SPECS.UNITS[type].ATTACK_RADIUS) return false;
+    if (dist < SPECS.UNITS[type].ATTACK_RADIUS[0]) return false; 
+    if (dist > SPECS.UNITS[type].ATTACK_RADIUS[1]) return false;
     return true;
 }
 
@@ -129,19 +131,21 @@ export function look(game, target_id) {
         if (!("type" in r)) return;
         if (!("x" in r)) return;
         if (!("team" in r)) return;
+        game.log("in look, robot type was " + r.unit);
         
         if (r.team === game.me.team) {
             friendly.push(r);
         } else {
-            var dist = utils.loc_dist([game.me.x, game.me.y], [r.x, r.y]);
-            if (utils.in_fire_range(r.unit, dist)) exposed_to.push(r);
-            if (utils.in_fire_range(game.me.unit, dist)) in_range.push(r);
-            if (!utils.in_fire_range(r.unit, dist) && !utils.in_fire_range(game.me.unit, dist)) {
+            var dist = loc_dist([game.me.x, game.me.y], [r.x, r.y]);
+            if (in_fire_range(r.unit, dist)) exposed_to.push(r);
+            if (in_fire_range(game.me.unit, dist)) in_range.push(r);
+            if (!in_fire_range(r.unit, dist) && !in_fire_range(game.me.unit, dist)) {
                 other.push(r);
             }
-            if (utils.in_fire_range(r.unit, dist) && utils.in_fire_range(game.me.unit, dist)) {
+            if (in_fire_range(r.unit, dist) && in_fire_range(game.me.unit, dist)) {
                 confronting.push(r);
             }
+            game.log("was enemy. dist: " + dist + " unit: " + r.unit + " exposed: " + in_fire_range(r.unit, dist) + " in range: " + in_fire_range(game.me.unit, dist));
         }
 
         if (r.id === target_id) {
@@ -171,4 +175,14 @@ export function get_home(game, friendly) {
 
     if (retval) return retval;
     game.log("Could not find original home for this guy");
+}
+
+export function robots_collide(robots, coord) {
+    for (var i = 0; i < robots.length; i++ ) {
+        var r = robots[i];
+        if ("x" in r) {
+            if (r.x === coord[0] && r.y === coord[1]) return true;
+        }
+    }
+    return false;
 }

@@ -16,6 +16,8 @@ var distmap_jog = null;
 var rows = null, cols = null;
 var first_pilgrim = true;
 
+var building_backlog = [];
+
 const PILGRIM_ABANDON_BUFFER = 1.10;
 const RESOURCE_MAX_R = 36;
 
@@ -180,16 +182,49 @@ function make_church_assignments(game) {
 function send_expedition(game, loc) {
     game.log("Sending expedition to " + loc[0] + " " + loc[1]);
 
-    last_target = [loc[0], loc[1]];
     var msg = new Message("pilgrim_build_church", loc[0], loc[1]);
-    game.signal(msg.encode(), 3);
 
-    // Find free spot
-    var getthere = nav.build_map(game.map, loc, 4, nav.GAITS.JOG, game.getVisibleRobots()); 
-    var [nx, ny] = nav.path_step(getthere, [game.me.x, game.me.y], 3); // 3 signals 8-adjacent.
+    building_backlog.push([SPECS.CRUSADER, null, null]);
+    building_backlog.push([SPECS.CRUSADER, null, null]);
+    building_backlog.push([SPECS.PILGRIM, loc, msg]);
 
-    if (nx === null) game.log("can't build expedition - caked in");
-    else return game.buildUnit(SPECS.CRUSADER, nx-game.me.x, ny-game.me.y);
+    return "BUILD";
+}
+
+function process_building_queue(game) {
+    game.log("Clearing backlog");
+    var robots = game.getVisibleRobots();
+    var [unit, dest, msg] = building_backlog[0];
+    if (msg) game.signal(msg.encode(), 3);
+    
+    var action = null;
+
+    if (dest) {
+        last_target = [dest[0], dest[1]];
+        // Find free spot closest to target
+        var getthere = nav.build_map(game.map, dest, 4, nav.GAITS.JOG, robots); 
+        var [nx, ny] = nav.path_step(getthere, [game.me.x, game.me.y], 3); // 3 signals 8-adjacent.
+        if (nx === null) game.log("can't build - caked in");
+        action = game.buildUnit(unit, nx-game.me.x, ny-game.me.y);
+    } else {
+        // Find any spot
+        for (var nx = Math.max(0, game.me.x-1); nx <= Math.min(cols-1, game.me.x+1); nx++) {
+            for (var ny = Math.max(0, game.me.y-1); ny <= Math.min(rows-1, game.me.y+1); ny++) {
+                if (nx === game.me.x && ny === game.me.y) continue;
+                if (game.map[ny][nx] === false) continue;
+                var collide = false;
+                robots.forEach(r => {
+                    if (r.x === nx && r.y === ny) collide = true;
+                });
+                if (!collide) action = game.buildUnit(unit, nx-game.me.x, ny-game.me.y);
+            }
+        }
+    }
+
+    if (action) {
+        building_backlog.shift();
+        return action;
+    } else game.log("Could not build unit for whatever reason");
 }
 
 function get_attackable_enemies(game, robots) {
@@ -233,6 +268,15 @@ export function turn(game, steps, is_castle = false) {
             a=>on_death(game, a)
         );
 
+    }
+
+    if (building_backlog.length) {
+        action = process_building_queue(game);
+        return action; // with a building queue it doesn't make sense to do other things.
+                        // A sent squad is kinda atomic.
+    }
+
+    if (is_castle) {
         // Attack visible enemies
         var enemies = get_attackable_enemies(game, robots);
         game.log("enemies:");
@@ -298,6 +342,8 @@ export function turn(game, steps, is_castle = false) {
 
             if (church_assignment === null) {
                 make_church_assignments(game);
+                game.log("Church assignments:");
+                game.log(church_assignment);
             }
 
             var my_churches = church_assignment[game.me.id];
@@ -327,6 +373,10 @@ export function turn(game, steps, is_castle = false) {
                 }
             }
         } 
+    }
+
+    if (action === "BUILD") {
+        action = process_building_queue(game);
     }
 
     game.log("build church took " + (new Date().getTime() - start));

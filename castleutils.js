@@ -17,6 +17,7 @@ function dfs(map, k_map, f_map, loc, seen, res) {
     for (var nx = Math.max(0, x-4); nx <= Math.min(cols-1, x+4); nx++) {
         for (var ny = Math.max(0, y-4); ny <= Math.min(rows-1, y+4); ny++) {
             if (seen[ny][nx]) continue;
+            if ((nx-x)*(nx-x) + (ny-y)*(ny-y) > 16) continue;
             if (k_map[ny][nx] || f_map[ny][nx]) {
                 dfs(map, k_map, f_map, [nx, ny], seen, res);
             }

@@ -102,16 +102,6 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t
     return res;
 }
 
-function robots_collide(robots, coord) {
-    for (var i = 0; i < robots.length; i++ ) {
-        var r = robots[i];
-        if ("x" in r) {
-            if (r.x === coord[0] && r.y === coord[1]) return true;
-        }
-    }
-    return false;
-}
-
 // Returns next location a unit should go to if we should go UP TO "step" distance
 // away.
 export function path_step(map, from, step, robots=[]) {
@@ -137,7 +127,7 @@ export function path_step(map, from, step, robots=[]) {
             
             var nx = sx+dx;
             var ny = sy+dy;
-            if (robots_collide(robots, [nx, ny])) {
+            if (utils.robots_collide(robots, [nx, ny])) {
                 if (dx !== sx || dy !== sy)
                     continue;
             }

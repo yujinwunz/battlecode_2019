@@ -126,8 +126,10 @@ function expedition_turn(game, steps) {
     if (Math.abs(game.me.x - target[0]) <= 1 && Math.abs(game.me.y - target[1]) <= 1) {
         if (game.karbonite >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_KARBONITE && 
             game.fuel >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_FUEL) {
-            mode = WANDERING;
-            return game.buildUnit(SPECS.CHURCH, target[0] - game.me.x, target[1] - game.me.y);
+            if (!utils.robots_collide(game.getVisibleRobots(), target)) { 
+                mode = WANDERING;
+                return game.buildUnit(SPECS.CHURCH, target[0] - game.me.x, target[1] - game.me.y);
+            }
         }
     } else {
         var robots = game.getVisibleRobots();
@@ -136,6 +138,37 @@ function expedition_turn(game, steps) {
         var [nx, ny] = nav.path_step(targetmap, [game.me.x, game.me.y], 4, robots.concat([{x:target[0], y:target[1]}]));
         return game.move(nx-game.me.x, ny-game.me.y);
     }
+}
+
+function call_for_backup(game, strength) {
+    // gradually expand until we find X units.
+    var robots = game.getVisibleRobots();
+    var cnt_by_dist = Array(102);
+    cnt_by_dist.fill(0);
+
+    robots.forEach(r => {
+        if (r.team !== game.me.team) return;
+        if (r.unit !== SPECS.CRUSADER 
+            && r.unit !== SPECS.PROPHET 
+            && r.unit !== SPECS.PREACHER) return;
+        var dist = (r.x-game.me.x)*(r.x-game.me.x) + (r.y-game.me.y)*(r.y-game.me.y);
+        cnt_by_dist[Math.min(dist, 101)] ++;
+    });
+
+    for (var i = 1; i <= 101; i++) cnt_by_dist[i] += cnt_by_dist[i-1];
+
+    var targetn = Math.min(cnt_by_dist[101], strength);
+    if (targetn === 0) return;
+
+    for (var i = 0; i <= 100; i++) {
+        if (cnt_by_dist[i] >= targetn) {
+            var msg = new Message("requesting_backup");
+            game.signal(msg.encode(game.me.id), i);
+            break;
+        }
+    }
+
+    throw "shouldn't be here";
 }
 
 function wandering_turn(game, steps) {
@@ -191,6 +224,7 @@ function wandering_turn(game, steps) {
                         nav.GAITS.WALK // in case we are in danger
                     );
 
+                    call_for_backup(game, 2); // get 2 crusaiders to escort you
                     return expedition_turn(game, steps);
                 }
             }

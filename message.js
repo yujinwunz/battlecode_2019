@@ -26,16 +26,13 @@ const SIGNEDMAP = {
     requesting_backup: true,
 };
 
-function gen_checksum(msg, x, y) {
+function gen_checksum(msg, id) {
     var checksum = CHECKSUM_VALUE;
     for (var i = CHECKSUM_BITS; i < 16; i += CHECKSUM_BITS) {
         checksum = checksum ^ ((msg >> i) & CHECKSUM_MASK);
     }
-    for (var i = CHECKSUM_BITS; i < COORD_BITS; i += CHECKSUM_BITS) {
-        checksum = checksum ^ ((x >> i) & CHECKSUM_MASK);
-    }
-    for (var i = CHECKSUM_BITS; i < COORD_BITS; i += CHECKSUM_BITS) {
-        checksum = checksum ^ ((y >> i) & CHECKSUM_MASK);
+    for (var i = 0; i < ID_BITS; i += CHECKSUM_BITS) {
+        checksum = checksum ^ ((id >> i) & CHECKSUM_MASK);
     }
 
     return checksum;
@@ -66,7 +63,7 @@ export class Message {
         }
     }
 
-    encode(x, y) { // coordinates for encryption. Only needed to encode encrypted
+    encode(id) { // coordinates for encryption. Only needed to encode encrypted
                    // message.
         if (this.type === "void") throw "can't encode void message";
 
@@ -83,7 +80,7 @@ export class Message {
 
         if (SIGNEDMAP[this.signed]) {
             if (msg & CHECKSUM_MASK) throw "signed message overflow";
-            msg = msg | gen_checksum(msg, x, y);
+            msg = msg | gen_checksum(msg, id);
         }
 
         return msg;
@@ -107,7 +104,7 @@ export function decode(rawmsg, frombot) {
         var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         msg = new Message("pilgrim_build_church", x, y);
         signed = false;
-    } else if (type === TYPEMAP.request_backup) {
+    } else if (type === TYPEMAP.requesting_backup) {
         msg = new Message("requesting_backup");
     } else {
         // invalid typecode, perhaps from enemy
@@ -116,7 +113,9 @@ export function decode(rawmsg, frombot) {
 
     if (signed) {
         var sign = omsg & CHECKSUM_MASK;
-        if (sign != gen_checksum(omsg, frombot.x, frombot.y)) {
+        var thissign = gen_checksum(omsg & (~CHECKSUM_MASK), frombot.id);
+        if (sign != thissign) {
+            console.log("Invalid message received with sums " + sign + " but got " + thissign);
             return new Message("void_signature");
         }
     }

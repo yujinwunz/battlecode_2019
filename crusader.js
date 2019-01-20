@@ -36,7 +36,9 @@ function listen(game) {
                 // I'm tempted to assume we saw an enemy or something. But it
                 // could just make things hard to debug.
                 game.log("Error: void message received " + raw + " from " + r.x + " " + r.y);
+                game.log("Message type: " + msg.type);
             } else if (msg.type === "requesting_backup") {
+                game.log("got backup request from " + r.x + " " + r.y);
                 state = DEFENDING;
                 target_loc = [r.x, r.y];
                 target_id = r.id;
@@ -81,18 +83,19 @@ export function turn(game, steps) {
     // Always attack if threatened
     if (confronting.length) {
         game.log("confronting some guys");
-        confronting.sort((a, b) => utils.threat_level(game, a) - utils.threat_level(b));
-        action = game.attack(confronting[0][0] - game.me.x, confronting[0][1] - game.me.y);
+        confronting.sort((a, b) => utils.threat_level(game, a) - utils.threat_level(game, b));
+        action = game.attack(confronting[0].x - game.me.x, confronting[0].y - game.me.y);
     } else if (in_range.length) {
         game.log("attacking in range");
-        in_range.sort((a, b) => utils.threat_level(game, a) - utils.threat_level(b));
-        action = game.attack(in_range[0][0] - game.me.x, in_range[0][1] - game.me.y);
+        in_range.sort((a, b) => utils.threat_level(game, a) - utils.threat_level(game, b));
+        action = game.attack(in_range[0].x - game.me.x, in_range[0].y - game.me.y);
     } else if (exposed_to.length) {
         game.log("exposed to");
         // fight or flight?
         // Exposed to would consist of only preachers.
         var opp_strength = 0;
-        if (DEFENDING) {
+        if (state === DEFENDING) {
+            game.log(exposed_to);
             exposed_to.sort((a, b) => 
                 utils.dist([a.x, a.y], target_loc) - 
                 utils.dist([b.x, b.y], target_loc)
@@ -114,10 +117,11 @@ export function turn(game, steps) {
 
         if (opp_strength <= 1 || true) { // fight
             game.log("fighting, not flighting");
-            var to = nav.build_map(game.map, exposed_to[0], 9, nav.GAITS.RUN, robots, 5);
+            var to = nav.build_map(game.map, [approach.x, approach.y], 9, nav.GAITS.RUN, robots, 5);
             var [nx, ny] = nav.path_step(to, [game.me.x, game.me.y], 9);
             action = game.move(game.me.x - nx, game.me.y - ny);
         } else { // or flight
+            game.log("flight mode");
             var best_score = 0;
             var best_loc = [null, null];
         }
@@ -130,6 +134,7 @@ export function turn(game, steps) {
     if (action === null) {
         // no enemies, so cruise
         if (state === DEFENDING) {
+            game.log("Defending vip at " + target_loc[0] + " " + target_loc[1] + " id " + target_id);
             // make cluster formation.
             // Add points for closeness to target, but take points away
             // for being too close to something.
@@ -152,12 +157,15 @@ export function turn(game, steps) {
                     var score = - Math.sqrt(target_map[ny][nx][0]);
 
                     var min_neigh = -(1<<30);
+                    var orbit_dist = utils.ORBIT_DIST_MOBILE;
+                    if (target_unit === SPECS.CASTLE || target_unit === SPECS.CHURCH) {
+                        orbit_dist = utils.ORBIT_DIST_CASTLE;
+                    }
                     friendly.forEach(r => {
                         if (r.id === game.me.id) { 
-                            game.log("skipping something because it's me");
                         } else if (r.id === target_id) {
                             if (r.x !== nx || r.y !== ny)
-                            min_neigh = Math.max(min_neigh, 100 / Math.min(utils.ORBIT_DIST, utils.dist([r.x, r.y], [nx, ny]))) * 5;
+                            min_neigh = Math.max(min_neigh, 100 / Math.min(orbit_dist, utils.dist([r.x, r.y], [nx, ny]))) * 5;
                             else min_neigh = (1<<30);
                         } else {
                             if (r.x !== nx || r.y !== ny) {
@@ -166,7 +174,6 @@ export function turn(game, steps) {
                             } else min_neigh = (1<<30);
                         }
                     });
-                    game.log(min_neigh + " " + nx + " " + ny);
                     score -= min_neigh;
                     if (!target_moved) score -= (dx*dx+dy*dy)*2;
 
@@ -178,7 +185,9 @@ export function turn(game, steps) {
             }
 
             if (bestto) {
-                action = game.move(bestto[0], bestto[1]);
+                if (bestto[0] !== 0 || bestto[1] !== 0) {
+                    action = game.move(bestto[0], bestto[1]);
+                } else action = game.proposeTrade(0, 0); // NULL action
             }
         } else if (state === ATTACKING) {
             // TODO
