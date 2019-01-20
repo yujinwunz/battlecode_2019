@@ -17,12 +17,13 @@ var rows = null, cols = null;
 var first_pilgrim = true;
 
 var building_backlog = [];
+var backup_requested = false;
 
 const PILGRIM_ABANDON_BUFFER = 1.10;
 const RESOURCE_MAX_R = 36;
 
-const NEW_CASTLE_FUEL_THRESHOLD = 300;
-const NEW_CASTLE_KARBONITE_THRESHOLD = 80;
+const NEW_CASTLE_FUEL_THRESHOLD = 500;
+const NEW_CASTLE_KARBONITE_THRESHOLD = 120;
 
 const MAX_FARM_DIST = 5;
 
@@ -250,7 +251,7 @@ export function turn(game, steps, is_castle = false) {
 
 
     var start = new Date().getTime();
-    if (assignments === null) {
+    if (steps === 1) {
         assignments = utils.null_array(game.map[0].length, game.map.length);
         //distmap_walk = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.WALK);
         distmap_jog = nav.build_map(game.map, [game.me.x, game.me.y], 4, nav.GAITS.JOG);
@@ -271,6 +272,7 @@ export function turn(game, steps, is_castle = false) {
     }
 
     if (building_backlog.length) {
+        game.log("Processing backlog");
         action = process_building_queue(game);
         return action; // with a building queue it doesn't make sense to do other things.
                         // A sent squad is kinda atomic.
@@ -377,6 +379,14 @@ export function turn(game, steps, is_castle = false) {
 
     if (action === "BUILD") {
         action = process_building_queue(game);
+    }
+
+    if (!backup_requested && !is_castle && !action && steps != 1) {
+        // a pilgrim built us. We just booted. So we should ask the pilgrim's reinforcements
+        // to cover us instead.
+        game.log("Requesting backup");
+        backup_requested = utils.call_for_backup(game, 2); 
+        game.log("Result: " + backup_requested);
     }
 
     game.log("build church took " + (new Date().getTime() - start));

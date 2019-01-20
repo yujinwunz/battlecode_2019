@@ -1,6 +1,7 @@
 import {SPECS} from 'battlecode';
 // Some useful util functions
 import * as msg from 'message.js';
+import {Message, decode} from 'message.js';
 
 export const VERTICAL = 0;
 export const HORIZONTAL = 1;
@@ -185,4 +186,38 @@ export function robots_collide(robots, coord) {
         }
     }
     return false;
+}
+
+export function call_for_backup(game, strength) {
+    // gradually expand until we find X units.
+    var robots = game.getVisibleRobots();
+    var vision = SPECS.UNITS[game.me.unit].VISION_RADIUS;
+    var cnt_by_dist = Array(vision+2);
+    cnt_by_dist.fill(0);
+
+    robots.forEach(r => {
+        if (r.team !== game.me.team) return;
+        if (r.unit !== SPECS.CRUSADER 
+            && r.unit !== SPECS.PROPHET 
+            && r.unit !== SPECS.PREACHER) return;
+        var dist = (r.x-game.me.x)*(r.x-game.me.x) + (r.y-game.me.y)*(r.y-game.me.y);
+        cnt_by_dist[Math.min(dist, vision+1)] ++;
+    });
+
+    for (var i = 1; i <= vision+1; i++) cnt_by_dist[i] += cnt_by_dist[i-1];
+
+    var targetn = Math.min(cnt_by_dist[vision+1], strength);
+    if (targetn === 0) return true;
+
+    for (var i = 0; i <= vision+1; i++) {
+        if (cnt_by_dist[i] >= targetn) {
+            var msg = new Message("requesting_backup");
+            if (i === vision+1) i = vision*2;
+            var success = game.fuel >= Math.ceil(Math.sqrt(i));
+            game.signal(msg.encode(game.me.id), i);
+            return success;
+        }
+    }
+
+    throw "shouldn't be here";
 }

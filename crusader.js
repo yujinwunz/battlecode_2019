@@ -119,6 +119,7 @@ export function turn(game, steps) {
             game.log("fighting, not flighting");
             var to = nav.build_map(game.map, [approach.x, approach.y], 9, nav.GAITS.RUN, robots, 5);
             var [nx, ny] = nav.path_step(to, [game.me.x, game.me.y], 9);
+            game.log("moving to " + (game.me.x-nx) + " " + (game.me.y - ny));
             action = game.move(game.me.x - nx, game.me.y - ny);
         } else { // or flight
             game.log("flight mode");
@@ -186,6 +187,7 @@ export function turn(game, steps) {
 
             if (bestto) {
                 if (bestto[0] !== 0 || bestto[1] !== 0) {
+                    game.log("moving to " + (bestto[0]) + " " + (bestto[1]));
                     action = game.move(bestto[0], bestto[1]);
                 } else action = game.proposeTrade(0, 0); // NULL action
             }
