@@ -71,10 +71,11 @@ obs_map = [
 ];
 
 for (var rep = 0; rep < 300; rep++) {
-    trail = nav.build_map(obs_map, [4, 0], 4, nav.GAITS.JOG);
+    trail = nav.build_trail(obs_map, [4, 0], 4, nav.GAITS.JOG);
     if (rep === 0 || rep === 9 || rep === 29 || rep === 99) console.log("Done in " + (new Date().getTime() - start));
 }
 console.log("Done in " + (new Date().getTime() - start));
 
 
 console.log(trail);
+console.log(nav.path_step(trail, [1, 0], 3));

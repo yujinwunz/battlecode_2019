@@ -14,13 +14,11 @@ export function bitCount (n) {
   return ((n + (n >> 4) & 0xF0F0F0F) * 0x1010101) >> 24
 }
 
-export function null_array(cols, rows) {
-    var map = [];
-    for (var i = 0; i < rows; i++) {
-        var toadd = Array(cols).fill(null);
-        map.push(toadd);
-    }
-    return map;
+export function int_array(cols, rows, init=-1) {
+    var buffer = new ArrayBuffer(cols*rows*4);
+    var arr = new Int32Array(buffer);
+    for (var i = 0; i < cols*rows; i++) arr[i] = init;
+    return arr;
 }
 
 export function symmetry(map) {

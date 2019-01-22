@@ -1,7 +1,8 @@
-import PQ from './priorityqueue';
 import * as utils from './utils.js';
 
-export const ADJACENT = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
+export const T_BITS = 10;
+export const MAX_T = (1<<T_BITS);
+export const T_MASK = MAX_T-1;
 
 // gaits
 export const GAITS = {
@@ -48,7 +49,7 @@ class Queue {
 }
 
 // Returns a distancemap given the target location. Set max_t for small localized dfs's.
-export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t=(1<<30)) {
+export function build_trail(pass_map, target, max_jump=4, gait=0, robots=[], max_t=(1<<30)) {
     var [tx, ty] = target;
     var rows = pass_map.length;
     var cols = pass_map[0].length;
@@ -68,15 +69,15 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t
     dij.push([0, 0, tx, ty]);
     
 
-    var res = utils.null_array(cols, rows);
+    var res = utils.int_array(cols, rows);
 
     var root=Math.ceil(Math.sqrt(max_jump)-EPS);
     while (dij.length) {
         var [f, t, x, y] = dij.pop();
 
-        if (res[y][x] !== null) continue;
+        if (res[y*cols+x] !== -1) continue;
         if (t > max_t) continue;
-        res[y][x] = [f, t];
+        res[y*cols+x] = f*MAX_T+t;
 
         for (var dx = -root; dx <= +root; dx++) {
             for (var dy = -root; dy <= +root; dy++) {
@@ -87,7 +88,7 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t
                 if (ny < 0 || ny >= rows) continue;
                 
                 if (!pass_map[ny][nx]) continue;
-                if (res[ny][nx] !== null) continue;
+                if (res[ny*cols+nx] !== -1) continue;
                 dij.push([f + dx*dx + dy*dy, t+1, nx, ny]);   
             }
         }
@@ -104,13 +105,13 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t
 
 // Returns next location a unit should go to if we should go UP TO "step" distance
 // away.
-export function path_step(map, from, step, robots=[], fitness=null) {
-    var rows = map.length;
-    var cols = map[0].length;
+export function path_step(trail, from, step, robots=[], fitness=null) {
+    var rows = Math.sqrt(trail.length);
+    var cols = rows;
 
     var [sx, sy] = from;
 
-    var bestdist = map[sy][sx] ? map[sy][sx] : [(1<<30), 0];
+    var bestdist = trail[sy*cols+sx] ? trail[sy*cols+sx] : (1<<30);
     var bestto = [null, null];
 
     var max_coord = Math.ceil(Math.sqrt(step) - EPS);
@@ -120,7 +121,7 @@ export function path_step(map, from, step, robots=[], fitness=null) {
             if (dx === 0 && dy === 0) {
                 // To prevent "orbiting" around an occupied goal, don't force a move
                 // when 1 away from goal
-                if (!map[sy][sx] || map[sy][sx][1] > 1) {
+                if (!trail[sy*cols+sx] || (trail[sy*cols+sx] & T_MASK) > 1) {
                     continue; // Help avoid "awkward hallway dance"
                 }
             }
@@ -134,16 +135,16 @@ export function path_step(map, from, step, robots=[], fitness=null) {
 
             if (nx < 0 || nx >= cols) continue;
             if (ny < 0 || ny >= rows) continue;
-            if (map[ny][nx] === null) continue;
+            if (trail[ny*cols+nx] === -1) continue;
 
             if (dx*dx + dy*dy <= step) {
-                var news = map[ny][nx].slice();
-                if (fitness) news[0] += fitness(nx, ny);
-                var newd = distcmp(news, bestdist);
+                var news = trail[ny*cols+nx];
+                if (fitness) news += (fitness(nx, ny) << T_BITS);
+                var newd = news - bestdist;
 
                 // Add a bit of randomness to break the "awkward dance" along the hallways.
                 if (newd < 0 || (newd == 0 && Math.random() < 0.2)) {
-                    bestdist = map[ny][nx];
+                    bestdist = trail[ny*cols+nx];
                     bestto = [nx, ny];
                 }
             }
