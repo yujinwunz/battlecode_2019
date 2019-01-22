@@ -36,6 +36,20 @@ function get_adjacent_castle(robots, me) {
     return null;
 }
 
+function danger_level(game,x, y) {
+    var danger = 0;
+    game.getVisibleRobots().forEach(r => {
+        if (!("team" in r)) return;
+        if (!("unit" in r)) return;
+        if (!("x" in r)) return;
+        if (r.team !== game.me.team) {
+            var dist = utils.dist([r.x, r.y], [x, y]);
+            if (utils.in_fire_range(r.unit, dist)) danger += 50 * SPECS.UNITS[r.unit].ATTACK_DAMAGE;
+        }
+    });
+    return danger;
+}
+
 function mining_turn(game, steps) {
     var robots = game.getVisibleRobots();
     var has_neighboring_pilgrim = false;
@@ -106,7 +120,9 @@ function mining_turn(game, steps) {
             action = game.give(castle.x - game.me.x, castle.y - game.me.y, game.me.karbonite, game.me.fuel);
         } else {
 
-            var [nx, ny] = nav.path_step(homemap, [game.me.x, game.me.y], (state === DANGER ? 4 : DEFAULT_SPEED), robots);
+            var [nx, ny] = nav.path_step(homemap, [game.me.x, game.me.y], (state === DANGER ? 4 : DEFAULT_SPEED), robots, (x, y) => 
+                danger_level(game, x, y)
+            );
             if (nx === null) {
                 utils.print_map(game, homemap);
             }
@@ -142,7 +158,9 @@ function expedition_turn(game, steps) {
         var robots = game.getVisibleRobots();
                                                                     // full steam ahead.    make sure we don't walk on the square
         //                                                          //                     where the church is supposed to be
-        var [nx, ny] = nav.path_step(targetmap, [game.me.x, game.me.y], 4, robots.concat([{x:target[0], y:target[1]}]));
+        var [nx, ny] = nav.path_step(targetmap, [game.me.x, game.me.y], 4, robots.concat([{x:target[0], y:target[1]}]), (x, y) => 
+            danger_level(game, x, y)
+        );
         return game.move(nx-game.me.x, ny-game.me.y);
     }
 }
@@ -162,7 +180,7 @@ function wandering_turn(game, steps) {
         if (!("unit" in r)) return;
         if ((r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) && r.team == game.me.team) {
             if ("signal" in r) {
-                var msg = decode(r.signal, game.me);
+                var msg = decode(r.signal, r, game.me.team);
                 
                 game.log("Pilgrim got message " + r.signal + " type " + msg.type);
                 game.log("Message was from " + r.unit + " " + r.x + " " + r.y);

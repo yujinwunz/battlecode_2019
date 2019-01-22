@@ -73,7 +73,7 @@ function step_back(game, inside, threatening) {
     }
 
     if (low_loc[0] !== null) {
-        return game.move(low_loc[0]-game.me.x, low_loc[1].game.me.y);
+        return game.move(low_loc[0]-game.me.x, low_loc[1] - game.me.y);
     }
 }
 
@@ -93,15 +93,18 @@ export function turn(game, steps) {
         });
         
         if (confronting.length) {
+            game.log("prophet confronting");
             // are always enemy prophets, in which case just kill them plz
             confronting.sort((a, b) => utils.threat_level(game, a) - utils.threat_level(game, b));
-            return game.move(confronting[0].x - game.me.x, confronting[0].y - game.me.y);
+            return game.attack(confronting[0].x - game.me.x, confronting[0].y - game.me.y);
         } else if (exposed.length) {
+            game.log("prophet dodging");
             // are always enemies attacking me while inside my min radius. Run away.
             return run_away(game, enemies_threatening);
         } else if (in_range.length) {
+            game.log("prophet freerolling");
             in_range.sort((a, b) => utils.threat_level(game, a) - utils.threat_level(game, b));
-            return game.move(in_range[0].x - game.me.x, in_range[0].y - game.me.y);
+            return game.attack(in_range[0].x - game.me.x, in_range[0].y - game.me.y);
         } else {
             if (enemies_inside.length) {
                 // only benign enemies inside me now

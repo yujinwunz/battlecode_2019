@@ -209,7 +209,7 @@ export function call_for_backup(game, strength, filter) {
             var msg = new Message("requesting_backup", filter);
             if (i === vision+1) i = vision*2;
             var success = game.fuel >= Math.ceil(Math.sqrt(i));
-            game.signal(msg.encode(game.me.id), i);
+            game.signal(msg.encode(game.me.id, game.me.team), i);
             return success;
         }
     }

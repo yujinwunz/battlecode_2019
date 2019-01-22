@@ -17,6 +17,9 @@ const TYPEMAP = {
     pilgrim_build_church: 0b001,
 
     requesting_backup: 0b010,
+
+    attack_1: 0b011,
+    attack_2: 0b100,
 };
 
 // signed messages ensure that during the chaos of battle,
@@ -26,9 +29,12 @@ const SIGNEDMAP = {
     pilgrim_build_church: false,
 
     requesting_backup: true,
+
+    attack_1: false, // coordinates
+    attack_2: true, // filter and checksum
 };
 
-function gen_checksum(msg, id) {
+function gen_checksum(msg, id, team) {
     var checksum = CHECKSUM_VALUE;
     for (var i = CHECKSUM_BITS; i < 16; i += CHECKSUM_BITS) {
         checksum = checksum ^ ((msg >> i) & CHECKSUM_MASK);
@@ -36,6 +42,7 @@ function gen_checksum(msg, id) {
     for (var i = 0; i < ID_BITS; i += CHECKSUM_BITS) {
         checksum = checksum ^ ((id >> i) & CHECKSUM_MASK);
     }
+    checksum ^= team;
 
     return checksum;
 }
@@ -56,6 +63,11 @@ export class Message {
         if (this.type === "pilgrim_assign_target" || this.type == "pilgrim_build_church") {
             this.x = arguments[1];
             this.y = arguments[2];
+        } else if (this.type === "attack_1") {
+            this.x = arguments[1];
+            this.y = arguments[2];
+        } else if (this.type === "attack_2") {
+            this.filter = arguments[1];
         } else if (this.type === "requesting_backup") {
             this.filter = arguments[1];
         } else if (this.type === "void" || this.type === "void_signature") {
@@ -65,7 +77,7 @@ export class Message {
         }
     }
 
-    encode(id) { // coordinates for encryption. Only needed to encode encrypted
+    encode(id, team) { // coordinates for encryption. Only needed to encode encrypted
                    // message.
         if (this.type === "void") throw "can't encode void message";
 
@@ -78,18 +90,23 @@ export class Message {
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
         } else if (this.type === "requesting_backup") {
             msg |= (this.filter << (16 - TYPE_BITS - UNIT_FILTER_BITS));
+        } else if (this.type === "attack_1") {
+            msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
+            msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS)); 
+        } else if (this.type === "attack_2") {
+            msg |= (this.filter << (16 - TYPE_BITS - UNIT_FILTER_BITS));
         }
 
         if (SIGNEDMAP[this.signed]) {
             if (msg & CHECKSUM_MASK) throw "signed message overflow";
-            msg = msg | gen_checksum(msg, id);
+            msg = msg | gen_checksum(msg, id, team);
         }
 
         return msg;
     }
 }
 
-export function decode(rawmsg, frombot) {
+export function decode(rawmsg, frombot, team) {
     var omsg = rawmsg;
     var [type, rawmsg] = eat_msg(rawmsg, 3);
 
@@ -109,6 +126,13 @@ export function decode(rawmsg, frombot) {
     } else if (type === TYPEMAP.requesting_backup) {
         var [filter, rawmsg] = eat_msg(rawmsg, UNIT_FILTER_BITS);
         msg = new Message("requesting_backup", filter);
+    } else if (type === TYPEMAP.attack_1) {
+        var [x, rawmsg] = eat_msg(rawmsg, COORD_BITS);
+        var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS); 
+        msg = new Message("attack_1", x, y);
+    } else if (type === TYPEMAP.attack_2) {
+        var [filter, rawmsg] = eat_msg(rawmsg, UNIT_FILTER_BITS);
+        msg = new Message("attack_2", filter);
     } else {
         // invalid typecode, perhaps from enemy
         return new Message("void");
@@ -116,7 +140,7 @@ export function decode(rawmsg, frombot) {
 
     if (signed) {
         var sign = omsg & CHECKSUM_MASK;
-        var thissign = gen_checksum(omsg & (~CHECKSUM_MASK), frombot.id);
+        var thissign = gen_checksum(omsg & (~CHECKSUM_MASK), frombot.id, team);
         if (sign != thissign) {
             console.log("Invalid message received with sums " + sign + " but got " + thissign);
             return new Message("void_signature");

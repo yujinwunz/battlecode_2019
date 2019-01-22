@@ -104,7 +104,7 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t
 
 // Returns next location a unit should go to if we should go UP TO "step" distance
 // away.
-export function path_step(map, from, step, robots=[]) {
+export function path_step(map, from, step, robots=[], fitness=null) {
     var rows = map.length;
     var cols = map[0].length;
 
@@ -137,7 +137,9 @@ export function path_step(map, from, step, robots=[]) {
             if (map[ny][nx] === null) continue;
 
             if (dx*dx + dy*dy <= step) {
-                var newd = distcmp(map[ny][nx], bestdist);
+                var news = map[ny][nx].slice();
+                if (fitness) news[0] += fitness(nx, ny);
+                var newd = distcmp(news, bestdist);
 
                 // Add a bit of randomness to break the "awkward dance" along the hallways.
                 if (newd < 0 || (newd == 0 && Math.random() < 0.2)) {

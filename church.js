@@ -17,7 +17,10 @@ var rows = null, cols = null;
 var first_pilgrim = true;
 
 var building_backlog = [];
+var signal_backlog = [];
+
 var backup_requested = false;
+var last_distress = -(1<<30);
 
 const PILGRIM_ABANDON_BUFFER = 1.10;
 const RESOURCE_MAX_R = 36;
@@ -33,6 +36,7 @@ const REINFORCEMENT_MAX_DIST = 100;
 const CRUSAIDER_PROTEC = 1;
 const PROPHET_PROTEC = 2;
 const PREACHER_PROTEC = 3;
+const SOS_DELAY = 20;
 
 var known_units = {};
 // var ongoing_expeditions = {}; // Merged with assigned_to.
@@ -41,6 +45,8 @@ var church_assignment = null;
 // remember where we sent the last guy off to because we can only get his id
 // on the next turn.
 var last_target = null;
+
+var attack_called = false;
 
 // How many turns after the last time we saw a pilgrim report back should we 
 // assume it died and mark the resource expired?
@@ -239,6 +245,8 @@ function get_attackable_enemies(game, robots) {
     return ret;
 }
 
+var symmetry = null;
+
 export function turn(game, steps, is_castle = false) {
     game.log("I am a church/castle. fuel and karbs: " + game.fuel + " " + game.karbonite);
     rows = game.map.length;
@@ -247,6 +255,8 @@ export function turn(game, steps, is_castle = false) {
     game.log("Number of robots: " + robots.length);
     game.log(robots);
 
+
+    if (symmetry === null) symmetry = utils.symmetry(game.map);
 
     var start = new Date().getTime();
     if (steps === 1) {
@@ -269,6 +279,16 @@ export function turn(game, steps, is_castle = false) {
 
     }
 
+    if (signal_backlog.length) {
+        game.log("processing signal backlog");
+        var [code, rad] = signal_backlog[0];
+        if (game.fuel >= rad) {
+            game.signal(code, rad);
+            signal_backlog.shift();
+        }
+        return undefined; // don't jam the signal with another action that comes with a signal
+    }
+
     if (building_backlog.length) {
         game.log("Processing backlog");
         action = process_building_queue(game);
@@ -285,6 +305,12 @@ export function turn(game, steps, is_castle = false) {
 
         if (enemies.length) {
             game.log("attacking " + enemies[0].id);
+            // Distress call
+            if (steps > last_distress + SOS_DELAY) {
+                game.log("SOS");
+                last_distress = steps;
+                utils.call_for_backup(game, 1000, 0b111000);
+            }
             action = game.attack(enemies[0].x - game.me.x, enemies[0].y - game.me.y);
         }
     }
@@ -404,8 +430,24 @@ export function turn(game, steps, is_castle = false) {
         // a pilgrim built us. We just booted. So we should ask the pilgrim's reinforcements
         // to cover us instead.
         game.log("Requesting backup");
-        backup_requested = utils.call_for_backup(game, 2, (1<<SPECS.CRUSAIDER)); 
+        backup_requested = utils.call_for_backup(game, 1000, 0b111000); 
         game.log("Result: " + backup_requested);
+    }
+
+    // periodic attacking
+    if (steps % 100 === game.me.id % 100) attack_called = false;
+
+    if (!action && is_castle && !attack_called && steps >= 100 + game.me.id % 100) {
+        game.log("wtf");
+        attack_called = true;
+        var ox = game.me.x, oy = game.me.y;
+        if (symmetry === utils.VERTICAL) ox = cols-1-ox;
+        else oy = rows-1-oy;
+        game.log("Calling attack on " + ox + " " + oy);
+        game.signal(new Message("attack_1", ox, oy).encode(), cols*cols);
+        signal_backlog.push([new Message("attack_2", 0b111000).encode(game.me.id, game.me.team), cols*cols]);
+    } else {
+        game.log("Not attacking. " + action + " " + is_castle + " attack_called: " + attack_called + " " + steps);
     }
 
     game.log("build church took " + (new Date().getTime() - start));
