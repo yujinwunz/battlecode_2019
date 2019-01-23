@@ -159,7 +159,7 @@ export function decode(rawmsg, frombot, team) {
         }
     }
 
-    msg.sender = frombot;
+    msg.sender = Object.assign(frombot);
     return msg;
 }
 

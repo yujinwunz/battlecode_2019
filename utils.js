@@ -236,7 +236,7 @@ export function argmax(arr, f) {
     var ans = null;
     arr.forEach(a => {
         var s = f(a);
-        if (score === null || score < s) {
+        if (s !== null && (score === null || score < s)) {
             score = s;
             ans = a;
         }
@@ -244,18 +244,27 @@ export function argmax(arr, f) {
     return ans;
 }
 
+// Also an argmax
 export function iterlocs(cols, rows, loc, r, f) {
     var [cx, cy] = loc;
     var root = Math.floor(Math.sqrt(r) + 0.001);
+    var score = null;
+    var ans = [null, null];
     for (var dx = -root; dx <= root; dx++) {
         for (var dy = -root; dy <= root; dy++) {
             if (dx*dx + dy*dy > r) continue;
 
             var nx = cx+dx, ny = cy+dy;
             if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-            f(nx, ny);
+            var s = f(nx, ny);
+            if (s !== null && (score === null || s > score)) {
+                score = s;
+                ans = [nx, ny];
+            }
         }
     }
+
+    return ans;
 }
 
 var sym = null;
@@ -280,4 +289,8 @@ export function maybe_from_our_castle(game, loc) {
 
     // If all else fails, the opponent has to usefully forge our messages
     // and cause loss to us which is very hard in this timeframe.
+}
+
+export function adjacent(a, b) {
+    return dist(a, b) <= 2;
 }

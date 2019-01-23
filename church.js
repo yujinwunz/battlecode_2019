@@ -2,6 +2,8 @@ import {BCAbstractRobot, SPECS} from 'battlecode';
 import {Message, decode} from 'message.js';
 import * as utils from 'utils.js';
 
+import * as farm from 'farm.js';
+
 export function listen_orders(game) {
     var orders = [];
     game.getVisibleRobots().forEach(r => {
@@ -26,7 +28,21 @@ export function listen_orders(game) {
     return orders;
 }
 
-export function turn(game, steps, enemies,predators, prey, friends, orders) {
-    return [0, 0];
+export function turn(game, steps, enemies, friends, orders) {
+    // Observe
 
+
+
+    // Execute
+    var action = null;
+    var msg = null;
+    // Order your turn in priorities
+    
+    // Priority 1: Fulfil new orders
+
+    // Priority 2: Defense
+    
+    // Priority 3: Autopilot resource management
+    if (!action && !msg) var [action, msg] = farm.turn(game, steps, enemies, friends);
+    return [action, msg];
 }

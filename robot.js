@@ -133,9 +133,13 @@ function read_castle_talk(game) {
     }, castle.on_death);
 }
 
+function build_matrix() {
+
+}
+
 // common state variables
 var target = [null, null];
-var home;
+var home = null;
 var home_trail, target_trail;
 var vipid = -1;
 
@@ -157,9 +161,9 @@ class MyRobot extends BCAbstractRobot {
             if (this.me.unit === SPECS.CASTLE) {
                 init_castle_talk(this);
             } else if (warrior.is_warrior(this.me.unit)) {
-                var home = utils.get_home(this, friendly);     
-                vipid = home.id;
-                target = [home.x, home.y];
+                var _home = utils.get_home(this, friendly);     
+                vipid = _home.id;
+                target = [_home.x, _home.y];
                 target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.SPRINT);
             }
         }
@@ -179,11 +183,12 @@ class MyRobot extends BCAbstractRobot {
             var [action, msg] = castle.turn(this, steps, enemies, predators, prey, friends);
         } else if (this.me.unit === SPECS.CHURCH) {
             var orders = church.listen_orders(this);
-            var [action, msg] =  church.turn(this, steps, enemies, predators, prey, friends, orders);
+            var [action, msg] =  church.turn(this, steps, enemies, friends, orders);
         } else if (this.me.unit === SPECS.PILGRIM) {
             var orders = pilgrim.listen_orders(this);
             orders.forEach(o => {
                 if (o.type === "pilgrim_assign_target" || o.type === "pilgrim_build_church") {
+                    if (o.type === "pilgrim_assign_target" && target && target[0] !== null) return;
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, [], 5);
                     home = [o.sender.x, o.sender.y];
@@ -287,9 +292,9 @@ class MyRobot extends BCAbstractRobot {
             this.log("making action: " + action);
         }
         if (msg) {
-            game.log("Sending message " + msg[0].type + " by distance " + msg[1] + " raw " + msg[0].encode(game.me.id, game.me.team));
-            game.log(msg);
-            this.signal(msg[0].encode(game.me.id, game.me.team), msg[1]);
+            this.log("Sending message " + msg[0].type + " by distance " + msg[1] + " raw " + msg[0].encode(this.me.id, this.me.team));
+            this.log(msg);
+            this.signal(msg[0].encode(this.me.id, this.me.team), msg[1]);
         }
         return action;
     }

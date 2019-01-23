@@ -1,4 +1,5 @@
 import {BCAbstractRobot, SPECS} from 'battlecode';
+import * as farm from 'farm.js';
 
 
 // These are received before turn is called.
@@ -32,5 +33,5 @@ function if_i_should_do(smove) {
 
 export function turn(game, steps, enemies, predators, prey, friends) {
     
-    return [0, 0];
+    return farm.turn(game, enemies, friends);
 }
