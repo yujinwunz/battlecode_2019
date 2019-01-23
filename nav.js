@@ -1,4 +1,3 @@
-import PQ from './priorityqueue';
 import * as utils from './utils.js';
 
 export const ADJACENT = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];

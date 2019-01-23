@@ -27,5 +27,6 @@ export function listen_orders(game) {
 }
 
 export function turn(game, steps, enemies,predators, prey, friends, orders) {
+    return [0, 0];
 
 }

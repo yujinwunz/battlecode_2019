@@ -32,4 +32,5 @@ function if_i_should_do(smove) {
 
 export function turn(game, steps, enemies, predators, prey, friends) {
     
+    return [0, 0];
 }

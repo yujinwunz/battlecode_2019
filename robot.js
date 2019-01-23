@@ -5,6 +5,7 @@ import * as pilgrim from 'pilgrim.js';
 import * as crusader from 'crusader.js';
 import * as prophet from 'prophet.js';
 import * as preacher from 'preacher.js';
+import * as warrior from 'warrior.js';
 
 import {Message, decode} from 'message.js';
 import * as message from 'message.js';
@@ -14,7 +15,7 @@ import * as utils from 'utils.js';
 
 import * as castleutils from 'castleutils.js';
 
-var step = 0;
+var steps = 0;
 
 // Castle talk state
 const CASTLE_TALK_TYPE_BITS = 2;
@@ -28,9 +29,9 @@ var last_reported = {};
 
 // Sends a message via the free 8 bit castle channel.
 // Because they are free, we can choose to do a nice delivery network thing.
-export function send_to_castle(game, msg) {
+function send_to_castle(game, msg) {
     var bytes = 0;
-    while ((1<<(bytes*8)) <= msg) bytes++;
+    while ((1<<(bytes*8)) <= msg && bytes < 4) bytes++;
 
     castle_talk_queue.push((bytes << 3) | game.me.unit);
     while (bytes--) {
@@ -42,7 +43,7 @@ export function send_to_castle(game, msg) {
 // For castle talk, the type is at the end.
 
 // Lets the castle know you're still alive, and where you are.
-export function heartbeat(game) {
+function heartbeat(game) {
     if (castle_talk_queue.length === 0) {
         if (game.me.x === last_heartbeat[0] && game.me.y === last_heartbeat[1]) {
             send_to_castle(game, CASTLE_TALK_HEARTBEAT);
@@ -57,7 +58,7 @@ export function heartbeat(game) {
     } return false;
 }
 
-export function castle_talk_work(game) {
+function castle_talk_work(game) {
     if (castle_talk_queue.length) {
         game.castleTalk(castle_talk_queue[0]);
         castle_talk_queue.shift();
@@ -89,6 +90,7 @@ function report_enemies(game, steps) {
             msg = (msg << message.COORD_BITS) | to_report.x;
             msg = (msg << message.COORD_BITS) | to_report.y;
             msg = (msg << CASTLE_TALK_TYPE_BITS) | CASTLE_TALK_REPORT_ENEMY;
+            
             send_to_castle(game, msg);
             return true;
         }
@@ -147,18 +149,18 @@ var preacher_state = warrior.PROTECTING;
 
 class MyRobot extends BCAbstractRobot {
     turn() {
-        step++;
-        var [enemies, predators, prey, blindspot, friendly] = utils.glance(this);
+        steps++;
+        var [enemies, predators, prey, blindspot, friends] = utils.glance(this);
 
-        if (step === 1) {
-            game.log(game.me);
+        if (steps === 1) {
+            this.log(this.me);
             if (this.me.unit === SPECS.CASTLE) {
                 init_castle_talk(this);
             } else if (warrior.is_warrior(this.me.unit)) {
                 var home = utils.get_home(this, friendly);     
                 vipid = home.id;
                 target = [home.x, home.y];
-                target_trail = nav.build_map(this.map, target, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.SPRINT);
+                target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.SPRINT);
             }
         }
 
@@ -169,17 +171,17 @@ class MyRobot extends BCAbstractRobot {
 
         var matrix;
         if (this.me.unit !== SPECS.CASTLE && this.me.unit !== SPECS.CHURCH) {
-            matrix = build_matrix(game);
+            matrix = build_matrix(this);
         }
 
         if (this.me.unit === SPECS.CASTLE) {
             read_castle_talk(this);
-            var [action, msg] = castle.turn(this, step, enemies, predators, prey, friends);
+            var [action, msg] = castle.turn(this, steps, enemies, predators, prey, friends);
         } else if (this.me.unit === SPECS.CHURCH) {
-            var orders = church.listen_orders(game);
-            var [action, msg] =  church.turn(this, step, enemies, predators, prey, friends, orders);
+            var orders = church.listen_orders(this);
+            var [action, msg] =  church.turn(this, steps, enemies, predators, prey, friends, orders);
         } else if (this.me.unit === SPECS.PILGRIM) {
-            var orders = pilgrim.listen_orders(game);
+            var orders = pilgrim.listen_orders(this);
             orders.forEach(o => {
                 if (o.type === "pilgrim_assign_target" || o.type === "pilgrim_build_church") {
                     target = [o.x, o.y];
@@ -192,23 +194,23 @@ class MyRobot extends BCAbstractRobot {
             });
 
             if (pilgrim_state === pilgrim.ORPHAN) {
-                var [action, msg] = pilgrim.orphan(game, steps);
+                var [action, msg] = pilgrim.orphan(this, steps);
             } else if (pilgrim_state === pilgrim.MINING) {
-                var [action, msg] = pilgrim.mining(game, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
+                var [action, msg] = pilgrim.mining(this, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
             } else if (pilgrim_state === pilgrim.EXPEDITION) {
-                var [action, msg] = pilgrim.expedition(game, steps, matrix, target, target_trail, enemies, friends);
+                var [action, msg] = pilgrim.expedition(this, steps, matrix, target, target_trail, enemies, friends);
             }
         } else if (this.me.unit === SPECS.CRUSADER) {
-            var orders = warrior.listen_orders(game, vipid);
+            var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
                 if (o.type === "attack") {
                     target = [o.x, o.y];
-                    target_trail = nav.build_map(game.map, target, 9, nav.GAITS.SPRINT);
+                    target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
                     crusader_state = warrior.ATTACKING;
                 } else if (o.type === "requesting_backup") {
                     vipid = o.sender.id;
                     target = [o.sender.x, o.sender.y];
-                    target_trail = nav.build_map(game.map, target, 9, nav.GAITS.SPRINT);
+                    target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
                     crusader_state = warrior.PROTECTING;
                 } else if (o.type === "turtle") {
                     // TODO
@@ -217,23 +219,23 @@ class MyRobot extends BCAbstractRobot {
             });
 
             if (crusader_state === warrior.ATTACKING) {
-                var [action, msg] = crusader.attack(game, steps, matrix, enemies, predators, prey, friends, target, target_trail);
+                var [action, msg] = crusader.attack(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
             } else if (crusader_state === warrior.TURTLING) {
-                var [action, msg] = crusader.turtle(game, steps, matrix, enemies, predators, prey, friends);
+                var [action, msg] = crusader.turtle(this, steps, matrix, enemies, predators, prey, friends);
             } else if (crusader_state === warrior.PROTECTING) {
-                var [action, msg] = crusader.protect(game, steps, matrix, enemies, predators, prey, friends, target, target_trail);
+                var [action, msg] = crusader.protect(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
             }
         } else if (this.me.unit === SPECS.PROPHET) {
-            var orders = warrior.listen_orders(game, vipid);
+            var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
                 if (o.type === "attack") {
                     target = [o.x, o.y];
-                    target_trail = nav.build_map(game.map, target, 4, nav.GAITS.SPRINT);
+                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     prophet_state = warrior.ATTACKING;
                 } else if (o.type === "requesting_backup") {
                     vipid = o.sender.id;
                     target = [o.sender.x, o.sender.y];
-                    target_trail = nav.build_map(game.map, target, 4, nav.GAITS.SPRINT);
+                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     prophet_state = warrior.PROTECTING;
                 } else if (o.type === "turtle") {
                     // TODO
@@ -242,35 +244,35 @@ class MyRobot extends BCAbstractRobot {
             });
 
             if (prophet_state === warrior.ATTACKING) {
-                var [action, msg] = prophet.attack(game, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail);
+                var [action, msg] = prophet.attack(this, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail);
             } else if (prophet_state === warrior.TURTLING) {
-                var [action, msg] = prophet.turtle(game, steps, matrix, enemies, predators, prey, blindspot, friends);
+                var [action, msg] = prophet.turtle(this, steps, matrix, enemies, predators, prey, blindspot, friends);
             } else if (prophet_state === warrior.PROTECTING) {
-                var [action, msg] = prophet.protect(game, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail);
+                var [action, msg] = prophet.protect(this, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail);
             }
         } else if (this.me.unit === SPECS.PREACHER) {
-            var orders = warrior.listen_orders(game, vipid);
+            var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
                 if (o.type === "attack") {
                     target = [o.x, o.y];
-                    target_trail = nav.build_map(game.map, target, 4, nav.GAITS.SPRINT);
+                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     preacher_state = warrior.ATTACKING;
                 } else if (o.type === "requesting_backup") {
                     vipid = o.sender.id;
                     target = [o.sender.x, o.sender.y];
-                    target_trail = nav.build_map(game.map, target, 4, nav.GAITS.SPRINT);
+                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     preacher_state = warrior.PROTECTING;
                 }
             });
 
             if (preacher_state === warrior.ATTACKING) {
-                var [action, msg] = preacher.attack(game, steps, matrix, enemies, predators, prey, friends, target, target_trail);
+                var [action, msg] = preacher.attack(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
             } else if (preacher_state === warrior.PROTECTING) {
-                var [action, msg] = preacher.protect(game, steps, matrix, enemies, predators, prey, friends, target, target_trail);
+                var [action, msg] = preacher.protect(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
             }
         }
 
-        if (report_enemies(game, steps)) {
+        if (report_enemies(this, steps)) {
             // ok.
         } else if (heartbeat(this)) {
             // ok.

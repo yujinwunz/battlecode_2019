@@ -7,7 +7,7 @@ export const PROTECTING = 0;
 export const ATTACKING = 1;
 export const TURTLING = 2; // Only used in lategame turtling. So not much strategy except fly off to opposite corners.
 
-export function listen_to_orders(game, vipid) {
+export function listen_orders(game, vipid) {
     var orders = [];
     game.getVisibleRobots().forEach(r => {
         if ("signal" in r) {
