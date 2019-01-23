@@ -68,7 +68,7 @@ function castle_talk_work(game) {
 function report_enemies(game, steps) {
     // find an enemy that was reported last.
     var to_report = utils.argmax(game.getVisibleRobots(), r => {
-        if (r.team === 1-game.me.team) {
+        if (r.team === 1-game.me.team && "x" in r) {
             if (r.id in last_reported) {
                 return -last_reported[r.id];
             }
@@ -79,7 +79,7 @@ function report_enemies(game, steps) {
             if (r.unit === SPECS.PROPHET) return 80;
             if (r.unit === SPECS.CRUSADER) return 70;
             return 50;
-        } else return -(1<<30);
+        } else return null;
     });
 
     if (to_report) {
@@ -106,8 +106,8 @@ function init_castle_talk(game) {
     castleutils.init_castle_talk();
 }
 
-function read_castle_talk(game) {
-    castleutils.receive(game.getVisibleRobots(), castle.on_birth, (id, msg) => {
+function read_castle_talk(game, steps) {
+    castleutils.receive(game.getVisibleRobots(), (i, u) => castle.on_birth(game, steps, i, u), (id, msg) => {
         var type = msg % (1<<CASTLE_TALK_TYPE_BITS);
         msg >>= CASTLE_TALK_TYPE_BITS;
         if (type === CASTLE_TALK_HEARTBEAT) {
@@ -116,7 +116,7 @@ function read_castle_talk(game) {
             var y = msg % (1<<message.COORD_BITS);
             msg >>= message.COORD_BITS;
             var x = msg % (1<<message.COORD_BITS);
-            castle.on_ping(id, [x, y]);
+            castle.on_ping(game, steps, id, [x, y]);
         } else if (type === CASTLE_TALK_REPORT_ENEMY) {
             var y = msg % (1<<message.COORD_BITS);
             msg >>= message.COORD_BITS;
@@ -124,13 +124,13 @@ function read_castle_talk(game) {
             msg >>= message.COORD_BITS;
             var unit = msg % (1<<message.TYPE_BITS);
             msg >>= message.TYPE_BITS;
-            var eid = msg % (1<<message.TYPE_BITS);
-            castle.on_sighting(id, eid, [x, y], unit);
+            var eid = msg % (1<<message.ID_BITS);
+            castle.on_sighting(game, steps, id, eid, [x, y], unit);
         } else {
             // how?
             game.log("Impossibly invalid castle talk");
         }
-    }, castle.on_death);
+    }, i => castle.on_death(game, steps, i));
 }
 
 function build_matrix() {
@@ -179,7 +179,7 @@ class MyRobot extends BCAbstractRobot {
         }
 
         if (this.me.unit === SPECS.CASTLE) {
-            read_castle_talk(this);
+            read_castle_talk(this, steps);
             var [action, msg] = castle.turn(this, steps, enemies, predators, prey, friends);
         } else if (this.me.unit === SPECS.CHURCH) {
             var orders = church.listen_orders(this);

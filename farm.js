@@ -3,7 +3,7 @@ import {Message, decode} from 'message.js';
 import * as utils from 'utils.js';
 import * as nav from 'nav.js';
 
-const RESOURCE_MAX_R = 36;
+export const RESOURCE_MAX_R = 36;
 
 var assigned_to = {};
 var assignments = null;

@@ -28,10 +28,28 @@ export function listen_orders(game) {
     return orders;
 }
 
+function launch_expedition(game, loc) {
+    // launch pilgrim
+    var trail = nav.build_map(game.map, loc, 4, nav.GAITS.SPRINT, game.getVisibleRobots());
+    var [sx, sy] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+        if (utils.robots_collide(friends, [x, y])) return null;
+        if (utils.robots_collide(enemies, [x, y])) return null;
+        if (!trail[y][x]) return null;
+        return (-trail[y][x][0]*1000 -trail[y][x][1]);
+    });
+    if (sx !== null) {
+        return [
+            game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y),
+            [new Message("pilgrim_build_church", loc[0], loc[1]), 2]
+        ];
+    }
+    return [null, null];
+}
+
+var pendingorders = [];
+
 export function turn(game, steps, enemies, friends, orders) {
     // Observe
-
-
 
     // Execute
     var action = null;
@@ -39,6 +57,13 @@ export function turn(game, steps, enemies, friends, orders) {
     // Order your turn in priorities
     
     // Priority 1: Fulfil new orders
+    pendingorders = pendingorders.concat(orders);
+    if (pendingorders.length) {
+        var o = pendingorders[0];
+        if (o === "start_expedition") {
+            var [action, msg] = launch_expedition([o.x, o.y]);
+        }
+    }
 
     // Priority 2: Defense
     

@@ -65,7 +65,7 @@ export function get_best_church_location(map, group) {
     return bestloc;
 }
 
-export function get_church_locations(map, karbonite_map, fuel_map, existing_castles) {
+export function get_church_locations(map, karbonite_map, fuel_map) {
     var symmetry = utils.symmetry(map);
 
     cols = map[0].length;
@@ -126,15 +126,8 @@ export function get_church_locations(map, karbonite_map, fuel_map, existing_cast
     for (var i = 0; i < groups.length; i++) {
         var g = groups[i];
         // don't go if it's next to an existing castle
-        var ok = true;
-        for (var j = 0; j < existing_castles.length; j++) {
-            var x = existing_castles[j][0];
-            var y = existing_castles[j][1];
-            
-            if (Math.abs(g[0][0] - x) <= 4 && Math.abs(g[0][1] - y) <= 4) ok = false;
-        }
 
-        if (ok) churches.push(get_best_church_location(map, g));
+        churches.push(get_best_church_location(map, g));
     }
 
     return [churches, groups];
