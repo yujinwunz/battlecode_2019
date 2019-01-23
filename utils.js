@@ -61,42 +61,6 @@ export function print_map(console, map) {
     }
 }
 
-export var castle_talk_queue = []; // little endian
-
-// Sends a message via the free 8 bit castle channel.
-// Because they are free, we can choose to do a nice delivery network thing.
-export function send_to_castle(game, msg) {
-    var bytes = 0;
-    while ((1<<(bytes*8)) <= msg) bytes++;
-
-    castle_talk_queue.push((bytes << 3) | game.me.unit);
-    while (bytes--) {
-        castle_talk_queue.push(msg & 0b11111111);
-        msg = msg >> 8;
-    }
-}
-
-var last_heartbeat = [null, null];
-
-// Lets the castle know you're still alive, and where you are.
-export function heartbeat(game) {
-    if (castle_talk_queue.length === 0) {
-        if (game.me.x === last_heartbeat[0] && game.me.y === last_heartbeat[1]) {
-            send_to_castle(game, 0);
-        } else {
-            send_to_castle(game, (game.me.x << (msg.COORD_BITS)) | game.me.y);
-            last_heartbeat = [game.me.x, game.me.y];
-        }
-    }
-}
-
-export function castle_talk_work(game) {
-    if (castle_talk_queue.length) {
-        game.castleTalk(castle_talk_queue[0]);
-        castle_talk_queue.shift();
-    }
-}
-
 export function loc_dist(a, b) {
     return (a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]);
 }
@@ -119,6 +83,31 @@ export function threat_level(game, r) {
     var in_range = (game.me.x-r.x)*(game.me.x-r.x) + (game.me.y-r.y)*(game.me.y-r.y) <= SPECS.UNITS[r.unit].ATTACK_RANGE;
 
     return (in_range<<10) | (hp_per_hit<<5) | hp;
+}
+
+export function glance(game) {
+    var robots = game.getVisibleRobots();
+    var enemies = [], predators = [], prey = [], blindspot = [], friends = [];
+
+    robots.forEach(r => {
+        if (!("type" in r)) return;
+        if (!("x" in r)) return;
+        if (!("team" in r)) return;
+        
+        if (r.team === game.me.team) {
+            friends.push(r);
+        } else {
+            blindspot.push(r);
+            var dist = loc_dist([game.me.x, game.me.y], [r.x, r.y]);
+            if (in_fire_range(r.unit, dist)) predators.push(r);
+            if (in_fire_range(game.me.unit, dist)) prey.push(r);
+            else if (game.me.unit === SPECS.PROPHET && dist < 16) {
+                blindspot.push(r);
+            }
+        }
+    });
+
+    return [enemies, predators, prey, blindspot, friends];
 }
 
 export function look(game, target_id) {
@@ -240,4 +229,55 @@ export function arrcmp(a, b) {
         if (a[i] !== b[i]) return a[i] - b[i];
     }
     return 0;
+}
+
+export function argmax(arr, f) {
+    var score = null;
+    var ans = null;
+    arr.forEach(a => {
+        var s = f(a);
+        if (score === null || score < s) {
+            score = s;
+            ans = a;
+        }
+    });
+    return ans;
+}
+
+export function iterlocs(cols, rows, loc, r, f) {
+    var [cx, cy] = loc;
+    var root = Math.floor(Math.sqrt(r) + 0.001);
+    for (var dx = -root; dx <= root; dx++) {
+        for (var dy = -root; dy <= root; dy++) {
+            if (dx*dx + dy*dy > r) continue;
+
+            var nx = cx+dx, ny = cy+dy;
+            if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+            f(nx, ny);
+        }
+    }
+}
+
+var sym = null;
+export function maybe_from_our_castle(game, loc) {
+    if (sym === null) sym = symmetry(game.map);
+
+    // Castles are always near a resource
+    var possible = false;
+    itercols(game.map[0].length, game.map.length, loc, 4, (x, y) => {
+        if (game.karbonite_map[y][x] || game.fuel_map[y][x]) possible = true;
+    });
+    if (!possible) return false;
+
+    // Our castles are on a predetermined side of the board
+    if (sym === VERTICAL) {
+        if (loc[0] < game.map[0].length/2) return game.me.team === 0;
+        else return game.me.team === 1;
+    } else {
+        if (loc[1] < game.map.length/2) return game.me.team === 0;
+        else return game.me.team === 1;
+    }
+
+    // If all else fails, the opponent has to usefully forge our messages
+    // and cause loss to us which is very hard in this timeframe.
 }

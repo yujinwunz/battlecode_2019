@@ -151,11 +151,13 @@ export var unit_of_id     = [];
 
 var active_ids = new Set();
 
-for (var i = 0; i <= MAX_ID; i++) {
-    message_buffer.push(0);
-    buffer_size.push(0);
-    expected_size.push(0);
-    unit_of_id.push(null);
+export function init_castle_talk() {
+    for (var i = 0; i <= MAX_ID; i++) {
+        message_buffer.push(0);
+        buffer_size.push(0);
+        expected_size.push(0);
+        unit_of_id.push(null);
+    }
 }
 
 export function receive(robots, on_birth, on_msg, on_death) {

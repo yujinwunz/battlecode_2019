@@ -4,6 +4,7 @@ require('babel-register')({
 })
 
 const nav = require("./nav");
+const utils = require("./utils");
 
 var start = new Date().getTime();
 
@@ -70,8 +71,18 @@ obs_map = [
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,],
 ];
 
+var kek = [];
 for (var rep = 0; rep < 300; rep++) {
     trail = nav.build_trail(obs_map, [4, 0], 4, nav.GAITS.JOG);
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
+    kek.push(utils.int_array(64, 64));
     if (rep === 0 || rep === 9 || rep === 29 || rep === 99) console.log("Done in " + (new Date().getTime() - start));
 }
 console.log("Done in " + (new Date().getTime() - start));

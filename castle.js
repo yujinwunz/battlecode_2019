@@ -1,6 +1,35 @@
 import {BCAbstractRobot, SPECS} from 'battlecode';
-import {turn as church_turn} from 'church.js';
 
-export function turn(game, steps) {
-    return church_turn(game, steps, true);
+
+// These are received before turn is called.
+export function on_birth(id, unit) {
+
+}
+
+export function on_ping(id, loc) {
+
+}
+
+export function on_death(id) {
+
+}
+
+// Sighting of an enemy
+export function on_sighting(id, eid, loc, unit) {
+
+}
+
+const EXPAND = 0;
+const DEPLOY_TURTLE = 1;
+
+function canonical_strategic_move() {
+    // Returns a move.
+}
+
+function if_i_should_do(smove) {
+
+}
+
+export function turn(game, steps, enemies, predators, prey, friends) {
+    
 }
