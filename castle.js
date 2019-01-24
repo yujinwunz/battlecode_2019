@@ -34,6 +34,11 @@ export function on_ping(game, steps, id, loc) {
     var newlist = [];
     known_enemy_stations.forEach(s => {
         var [i, u, x, y] = s;
+        if (!(id in known_friends)) {
+            game.log("Ping from the dead:");
+            game.log(id);
+            game.log(known_friends);
+        }
         if (utils.dist([x, y], loc) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS) {
             // castle/church from enemy not seen.
             game.log("Observed the death of enemy station " + i);
@@ -190,6 +195,7 @@ function i_should_do(game, steps, smove, known_stations) {
 
     // 1. Is it my responsibility?
     if (type === EXPAND) {
+        if (game.karbonite < 10 || game.fuel < 50) return [null, null];
         var [x, y] = arg;
         var church = utils.argmax(known_stations, f => {
             if (!("x" in known_friends[f.id])) return null;
@@ -287,6 +293,19 @@ export function turn(game, steps, enemies, predators, prey, friends) {
     // Priority 3. Autopilot farming
     if (!action && !msg) {
         var [action, msg] = farm.turn(game, enemies, friends);
+    }
+
+    // Priority 4. Passive turtling.
+    if (!action && !msg) {
+        var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+            if (utils.robots_collide(friends, [x, y])) return null;
+            if (utils.robots_collide(enemies, [x, y])) return null;
+            return Math.random();
+        });
+
+        if (turtle[0] !== null) {
+            action = game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y);
+        }
     }
 
     return [action, msg];

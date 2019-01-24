@@ -85,7 +85,6 @@ function report_enemies(game, steps) {
 
     if (to_report) {
         if (castle_talk_queue.length === 0 || to_report.unit === SPECS.CASTLE) {
-            game.log(to_report);
             last_reported[to_report.id] = steps;
             var msg = to_report.id;
             msg = (msg * Math.pow(2, message.TYPE_BITS)) + to_report.unit;
@@ -151,7 +150,7 @@ var pilgrim_state = pilgrim.ORPHAN;
 
 // Crusader state
 var crusader_state = warrior.PROTECTING;
-var prophet_state = warrior.PROTECTING;
+var prophet_state = warrior.TURTLING;
 var preacher_state = warrior.PROTECTING;
 
 class MyRobot extends BCAbstractRobot {
@@ -173,7 +172,7 @@ class MyRobot extends BCAbstractRobot {
             if (this.me.unit === SPECS.CASTLE) {
                 init_castle_talk(this);
             } else if (warrior.is_warrior(this.me.unit)) {
-                var _home = utils.get_home(this, friendly);     
+                var _home = utils.get_home(this, friends);     
                 vipid = _home.id;
                 target = [_home.x, _home.y];
                 target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.SPRINT);

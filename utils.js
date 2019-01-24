@@ -97,7 +97,7 @@ export function glance(game) {
         if (r.team === game.me.team) {
             friends.push(r);
         } else {
-            blindspot.push(r);
+            enemies.push(r);
             var dist = loc_dist([game.me.x, game.me.y], [r.x, r.y]);
             if (in_fire_range(r.unit, dist)) predators.push(r);
             if (in_fire_range(game.me.unit, dist)) prey.push(r);
