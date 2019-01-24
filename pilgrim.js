@@ -64,10 +64,12 @@ export function mining(game, steps, matrix, target, target_trail, home, home_tra
             var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
                 if (utils.robots_collide(friends, [x, y])) return null;
                 if (utils.robots_collide(enemies, [x, y])) return null;
+                if (game.map[y][x] === false) return null;
                 if (utils.adjacent(home, [x, y])) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
                 return -utils.dist([x, y], home) * 1000 - utils.dist([x, y], [game.me.x, game.me.y]);
             });
             if (nx !== game.me.x || ny !== game.me.y) { 
+                game.log("moving to " + nx + " " + ny + " " + game.me.x + " " + game.me.y);
                 if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
             }
         }
@@ -78,6 +80,7 @@ export function mining(game, steps, matrix, target, target_trail, home, home_tra
         // go to work
         var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], 4, game.getVisibleRobots());
         if (nx !== game.me.x || ny !== game.me.y) {
+                game.log("moving to " + nx + " " + ny + " " + game.me.x + " " + game.me.y);
             if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
         }
     }
@@ -106,6 +109,7 @@ export function expedition(game, steps, matrix, target, trail, enemies, friends)
             if (utils.robots_collide(friends, [x, y])) return null;
             if (utils.robots_collide(enemies, [x, y])) return null;
             if (!trail[y][x]) return null;
+            if (x === target[0] && y === target[1]) return null; // don't stand on church square
             if (utils.adjacent([x, y],target)) {
                 if (game.karbonite_map[y][x]) return 100;
                 if (game.fuel_map[y][x]) return 50;
@@ -113,7 +117,9 @@ export function expedition(game, steps, matrix, target, trail, enemies, friends)
             }
             return (-trail[y][x][0] * 1000 - trail[y][x][1]);
         });
+        action = game.move(nx-game.me.x, ny-game.me.y);
     }
+    return [action, null];
 }
 
 export function orphan(game, steps) {

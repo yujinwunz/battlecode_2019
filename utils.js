@@ -273,7 +273,7 @@ export function maybe_from_our_castle(game, loc) {
 
     // Castles are always near a resource
     var possible = false;
-    itercols(game.map[0].length, game.map.length, loc, 4, (x, y) => {
+    iterlocs(game.map[0].length, game.map.length, loc, 4, (x, y) => {
         if (game.karbonite_map[y][x] || game.fuel_map[y][x]) possible = true;
     });
     if (!possible) return false;
@@ -292,5 +292,6 @@ export function maybe_from_our_castle(game, loc) {
 }
 
 export function adjacent(a, b) {
-    return dist(a, b) <= 2;
+    var d = dist(a, b);
+    return d > 0 && d <= 2;
 }

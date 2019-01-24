@@ -31,12 +31,12 @@ var last_reported = {};
 // Because they are free, we can choose to do a nice delivery network thing.
 function send_to_castle(game, msg) {
     var bytes = 0;
-    while ((1<<(bytes*8)) <= msg && bytes < 4) bytes++;
+    while (Math.pow(2, bytes*8) <= msg && bytes < 4) bytes++;
 
-    castle_talk_queue.push((bytes << 3) | game.me.unit);
+    castle_talk_queue.push((bytes * Math.pow(2, 3)) + game.me.unit);
     while (bytes--) {
         castle_talk_queue.push(msg & 0b11111111);
-        msg = msg >> 8;
+        msg = Math.floor(msg / 256);
     }
 }
 
@@ -49,8 +49,8 @@ function heartbeat(game) {
             send_to_castle(game, CASTLE_TALK_HEARTBEAT);
         } else {
             var msg = game.me.x;
-            msg = (msg << message.COORD_BITS) | game.me.y;
-            msg = (msg << CASTLE_TALK_TYPE_BITS) | CASTLE_TALK_REPORT_COORD;
+            msg = (msg * Math.pow(2, message.COORD_BITS)) | game.me.y;
+            msg = (msg * Math.pow(2, CASTLE_TALK_TYPE_BITS)) | CASTLE_TALK_REPORT_COORD;
             send_to_castle(game, msg);
             last_heartbeat = [game.me.x, game.me.y];
         }
@@ -86,10 +86,10 @@ function report_enemies(game, steps) {
         if (castle_talk_queue.length === 0 || to_report.unit === SPECS.CASTLE) {
             last_reported[to_report.id] = steps;
             var msg = to_report.id;
-            msg = (msg << message.TYPE_BITS) | to_report.unit;
-            msg = (msg << message.COORD_BITS) | to_report.x;
-            msg = (msg << message.COORD_BITS) | to_report.y;
-            msg = (msg << CASTLE_TALK_TYPE_BITS) | CASTLE_TALK_REPORT_ENEMY;
+            msg = (msg * Math.pow(2, message.TYPE_BITS)) + to_report.unit;
+            msg = (msg * Math.pow(2, message.COORD_BITS)) + to_report.x;
+            msg = (msg * Math.pow(2, message.COORD_BITS)) + to_report.y;
+            msg = (msg * Math.pow(2, CASTLE_TALK_TYPE_BITS)) + CASTLE_TALK_REPORT_ENEMY;
             
             send_to_castle(game, msg);
             return true;
@@ -108,29 +108,30 @@ function init_castle_talk(game) {
 
 function read_castle_talk(game, steps) {
     castleutils.receive(game.getVisibleRobots(), (i, u) => castle.on_birth(game, steps, i, u), (id, msg) => {
-        var type = msg % (1<<CASTLE_TALK_TYPE_BITS);
-        msg >>= CASTLE_TALK_TYPE_BITS;
+        var omsg = msg;
+        var type = msg % (1*Math.pow(2, CASTLE_TALK_TYPE_BITS));
+        msg = Math.floor(msg/Math.pow(2, CASTLE_TALK_TYPE_BITS));
         if (type === CASTLE_TALK_HEARTBEAT) {
             // pass
         } else if (type === CASTLE_TALK_REPORT_COORD) {
-            var y = msg % (1<<message.COORD_BITS);
-            msg >>= message.COORD_BITS;
-            var x = msg % (1<<message.COORD_BITS);
+            var y = msg % (1*Math.pow(2, message.COORD_BITS));
+            msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
+            var x = msg % (1*Math.pow(2, message.COORD_BITS));
             castle.on_ping(game, steps, id, [x, y]);
         } else if (type === CASTLE_TALK_REPORT_ENEMY) {
-            var y = msg % (1<<message.COORD_BITS);
-            msg >>= message.COORD_BITS;
-            var x = msg % (1<<message.COORD_BITS);
-            msg >>= message.COORD_BITS;
-            var unit = msg % (1<<message.TYPE_BITS);
-            msg >>= message.TYPE_BITS;
-            var eid = msg % (1<<message.ID_BITS);
+            var y = msg % (1*Math.pow(2, message.COORD_BITS));
+            msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
+            var x = msg % (1*Math.pow(2, message.COORD_BITS));
+            msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
+            var unit = msg % (1*Math.pow(2, message.TYPE_BITS));
+            msg = Math.floor(msg/Math.pow(2, message.TYPE_BITS));
+            var eid = msg % (1*Math.pow(2, message.ID_BITS));
             castle.on_sighting(game, steps, id, eid, [x, y], unit);
         } else {
             // how?
-            game.log("Impossibly invalid castle talk");
+            game.log("Impossibly invalid castle talk " + omsg + " from " + id);
         }
-    }, i => castle.on_death(game, steps, i));
+    }, i => castle.on_death(game, steps, i), game);
 }
 
 function build_matrix() {
@@ -154,6 +155,13 @@ var preacher_state = warrior.PROTECTING;
 class MyRobot extends BCAbstractRobot {
     turn() {
         steps++;
+        var castle_talk_worked = false;
+        if (castle_talk_queue.length) {
+            // Do this initailly so errors don't corrupt multipart castle talk. Only problem is timeout so bye bye
+            castle_talk_worked = true;
+            castle_talk_work(this);
+        }
+
         var [enemies, predators, prey, blindspot, friends] = utils.glance(this);
 
         if (steps === 1) {
@@ -187,14 +195,20 @@ class MyRobot extends BCAbstractRobot {
         } else if (this.me.unit === SPECS.PILGRIM) {
             var orders = pilgrim.listen_orders(this);
             orders.forEach(o => {
-                if (o.type === "pilgrim_assign_target" || o.type === "pilgrim_build_church") {
-                    if (o.type === "pilgrim_assign_target" && target && target[0] !== null) return;
+                if (o.type === "pilgrim_assign_target") {
+                    if (pilgrim_state === pilgrim.MINING && target && target[0] !== null) return;
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, [], 5);
                     home = [o.sender.x, o.sender.y];
                     home_trail = nav.build_map(this.map, home, 4, nav.GAITS.SPRINT, [], 5);
-                    if (o.type === "pilgrim_assign_target") pilgrim_state = pilgrim.MINING;
-                    else pilgrim_state = pilgrim.EXPEDITION;
+                    pilgrim_state = pilgrim.MINING;
+                } else if (o.type === "pilgrim_build_church") {
+                    if (pilgrim_state === pilgrim.MINING) return;
+                    target = [o.x, o.y];
+                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, []);
+                    home = [o.sender.x, o.sender.y];
+                    home_trail = nav.build_map(this.map, home, 4, nav.GAITS.SPRINT, []);
+                    pilgrim_state = pilgrim.EXPEDITION;
                 }
             });
 
@@ -277,13 +291,15 @@ class MyRobot extends BCAbstractRobot {
             }
         }
 
-        if (report_enemies(this, steps)) {
-            // ok.
-        } else if (heartbeat(this)) {
-            // ok.
-        }
+        if (!castle_talk_worked) {
+            if (report_enemies(this, steps)) {
+                // ok.
+            } else if (heartbeat(this)) {
+                // ok.
+            }
 
-        castle_talk_work(this);
+            castle_talk_work(this);
+        }
 
         var elapsed = new Date().getTime()-start;
         if (elapsed > 25) {

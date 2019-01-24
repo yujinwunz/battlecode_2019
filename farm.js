@@ -56,6 +56,8 @@ function headcount(game, friends) {
     });
 }
 
+var first_build = true;
+
 export function turn(game, enemies, friends) {
     if (assignments === null) initialize(game);
 
@@ -81,7 +83,13 @@ export function turn(game, enemies, friends) {
         if (sx === null) {
             game.log("Caked in, can't build");
         } else {
+            game.log("gonna build");
             action = game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y);
+            if (first_build && game.me.unit === SPECS.CHURCH) {
+                game.log("nullified");
+                action = null; // the first pilgrim is already there
+                first_build = false;
+            }
             msg = [new Message("pilgrim_assign_target", target[0], target[1]), 2];
             last_target = [target[0], target[1]];
         }

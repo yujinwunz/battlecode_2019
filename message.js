@@ -73,6 +73,9 @@ export class Message {
             this.y = arguments[2];
         } else if (this.type === "requesting_backup") {
             this.filter = arguments[1];
+        } else if (this.type === "start_expedition" || this.type === "start_assult") {
+            this.x = arguments[1];
+            this.y = arguments[2];
         } else if (this.type === "void" || this.type === "void_signature") {
             // Message from other team or malformed message
         } else {

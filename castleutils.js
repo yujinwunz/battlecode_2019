@@ -153,7 +153,7 @@ export function init_castle_talk() {
     }
 }
 
-export function receive(robots, on_birth, on_msg, on_death) {
+export function receive(robots, on_birth, on_msg, on_death, game=null) {
     var seen = new Set();
     robots.forEach(r => {
         if ("castle_talk" in r) {
@@ -172,9 +172,10 @@ export function receive(robots, on_birth, on_msg, on_death) {
                         unit_of_id[r.id] = unit;
                         on_birth(r.id, unit);
                     }
+                    if (game) game.log("got ct message size " + expected_size[r.id] + " unit " + unit);
                 }
             } else {
-                message_buffer[r.id] = message_buffer[r.id] | (r.castle_talk << (buffer_size[r.id]*8));
+                message_buffer[r.id] = message_buffer[r.id] + (r.castle_talk * Math.pow(2, (buffer_size[r.id]*8)));
                 buffer_size[r.id] ++;
                 if (buffer_size[r.id] === expected_size[r.id]) {
                     on_msg(r.id, message_buffer[r.id]);
