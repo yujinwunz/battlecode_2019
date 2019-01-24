@@ -161,23 +161,29 @@ export function receive(robots, on_birth, on_msg, on_death, game=null) {
             active_ids[r.id] = true;
             if (expected_size[r.id] === 0) {
                 // header byte
-                if (r.castle_talk !== 0) { // sometimes, units are built with
+                if (r.castle_talk > 0) { // sometimes, units are built with
                     // castle talk=0. But another castle is queued up before it
                     // and reads that value before the new unit has a chance
                     // to heartbeat. Just hack this in here. It should only affect
                     // castles sending an empty heartbeat.
                     var unit = r.castle_talk & 0b111;
                     expected_size[r.id] = r.castle_talk >> 3;
-                    if (unit_of_id[r.id] === null || unit_of_id[r.id] === undefined) {
-                        unit_of_id[r.id] = unit;
-                        on_birth(r.id, unit);
+                    if (expected_size[r.id] > 4 || unit >= 6) {
+                        // corrupted for some fucking reason. Ignore it until another one that makes sense
+                        if (game) game.log("Corrupted castle talk from " + r.id + ": header " + r.castle_talk);
+                        expected_size[r.id] = 0;
+                    } else {
+                        if (unit_of_id[r.id] === null || unit_of_id[r.id] === undefined) {
+                            unit_of_id[r.id] = unit;
+                            on_birth(r.id, unit);
+                        }
                     }
                 }
             } else {
                 message_buffer[r.id] = message_buffer[r.id] + (r.castle_talk * Math.pow(2, (buffer_size[r.id]*8)));
                 buffer_size[r.id] ++;
                 if (buffer_size[r.id] === expected_size[r.id]) {
-                    on_msg(r.id, message_buffer[r.id]);
+                    on_msg(r.id, unit_of_id[r.id], message_buffer[r.id]);
                     message_buffer[r.id] = 0;
                     buffer_size[r.id] = 0;
                     expected_size[r.id] = 0;

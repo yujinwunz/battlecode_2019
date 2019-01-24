@@ -1,66 +1,7 @@
 import {BCAbstractRobot, SPECS} from 'battlecode';
 import * as utils from 'utils.js';
 import * as nav from 'nav.js';
-
-const TURTLE_MIN_DIST = 9;
-
-// Can we STAY here? less computationally heavy
-function is_turtle(game, loc, friends) {
-    if ((loc[0] + loc[1]) % 2) return false;;
-
-    // Move away from the castle.
-    if (game.karbonite_map[loc[1]][loc[0]]) return false;
-    if (game.fuel_map[loc[1]][loc[0]]) return false;
-    var tooclose = false;
-    friends.forEach(r => {
-        if (r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) {
-            if (utils.dist(loc, [r.x, r.y]) < TURTLE_MIN_DIST) tooclose = true;
-        }
-    });
-    if (tooclose) return false;
-
-    return true;
-}
-
-// Can we MOVE here?
-function can_turtle(game, loc, enemies, friends) {
-    if ((loc[0] + loc[1]) % 2) return false; // the main one
-
-    if (!game.map[loc[1]][loc[0]]) return false;
-    if (utils.robots_collide(enemies, loc)) return false;
-    if (utils.robots_collide(friends, loc)) return false;
-
-    // Don't stand on resources or too close to interfere with pilgrims
-    if (game.karbonite_map[loc[1]][loc[0]]) return false;
-    if (game.fuel_map[loc[1]][loc[0]]) return false;
-    var tooclose = false;
-    var protecting = false;
-    friends.forEach(r => {
-        if (r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) {
-            if (utils.dist(loc, [r.x, r.y]) < TURTLE_MIN_DIST) tooclose = true;
-            if (utils.dist(loc, [r.x, r.y]) < 64) protecting = true;
-        }
-    });
-    if (tooclose) return false;
-
-    // Don't voluntarily go into enemy's fire unless it protects a castle/church.
-    if (!protecting) {
-        var dangerous = false;
-        enemies.forEach(e => {
-            if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], loc))) dangerous = true;
-        });
-        if (dangerous) return false;
-    }
-    return true;
-}
-
-function closest_visible_turtle(game, steps, enemies, friends) {
-    var loc = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].VISION_RADIUS, (x, y) => {
-        if (can_turtle(game, [x, y], enemies, friends)) return -utils.dist([x, y], [game.me.x, game.me.y]);
-        else return null;
-    });
-    return loc;
-}
+import * as _turtle from 'turtle.js';
 
 function reflex(game, steps, matrix, enemies, predators, prey, blindspot, friends) {
     // Shoot first
@@ -74,54 +15,54 @@ function reflex(game, steps, matrix, enemies, predators, prey, blindspot, friend
     return [null, null];
 }
 
-var dream_loc = null;
-var dream_trail = null;
-var last_turtle = [null, null];
-var turtle_trail = null;
-
-function turtle_move(game, steps, matrix, enemies, friends) {
-    if (is_turtle(game, [game.me.x, game.me.y], friends)) return [null, null];
-
-    // Not turtle so find turtle
-    var loc = closest_visible_turtle(game, steps, enemies, friends);
-
-    var trail = null;
-    if (loc[0] === null) {
-        // if whole view is crystalized, go to random point on map not in view.
-        var changed = false;
-        var iters = 0;
-        while ((iters < 100) && (dream_loc === null 
-                    || utils.dist(dream_loc, [game.me.x, game.me.y]) <= SPECS.UNITS[game.me.unit].VISION_RADIUS)) {
-
-            iters++;
-            dream_loc = [Math.floor(Math.random()*game.map.length), Math.floor(Math.random()*game.map[0].length)];
-            changed = true;
-        }
-        if (changed) {
-            dream_trail = nav.build_map(game.map, dream_loc, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.WALK);
-        }
-        trail = dream_trail;
-    } else {
-        if (last_turtle[0] !== loc[0] || last_turtle[1] !== loc[1]) {
-            turtle_trail = nav.build_map(game.map, loc, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.WALK);
-            last_turtle = [loc[0], loc[1]];
-        }
-        trail = turtle_trail;
-    }
-
-    var [x, y] = nav.path_step(trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, enemies.concat(friends));
-    if (x !== null && (x !== game.me.x || y !== game.me.y)) {
-        return [game.move(x - game.me.x, y - game.me.y), null];
-    }
-    return [null, null];
-}
 
 export function protect(game, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail) {
    throw "not implemented"; 
 }
 
 export function attack(game, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail) {
-    throw "not implemented";
+    game.log("attack turn");
+
+    // attack anything in sight first
+    if (prey.length) {
+        var tohit = utils.argmax(prey, f => utils.threat_level(game, f));
+        if (tohit) {
+            return [game.attack(tohit.x-game.me.x, tohit.y-game.me.y), null];
+        }
+    }
+
+    // Check blind spot if we've reached the target
+    if (utils.dist(target, [game.me.x, game.me.y]) < SPECS.UNITS[game.me.unit].VISION_RADIUS/2) {
+        if (blindspot.length) {
+            // Move away from that
+            var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, 
+                [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, (x, y) => {
+
+                    if (game.map[y][x] === false) return null;
+                    if (utils.robots_collide(friends, [x, y])) return null;
+                    if (utils.robots_collide(enemies, [x, y])) return null;
+                    
+                    var mindist = (1<<30);
+                    blindspot.forEach(f => {
+                        mindist = Math.min(mindist, utils.dist([f.x, f.y], [x, y]));
+                    });
+                    return mindist; // be as far away as any blind spot possible.
+                    // We are attacking and clearing so we don't care if we step into range.
+                    // We also wouldn't be able to tell.
+            });
+            if (nx !== null && (nx !== game.me.x || nx !== game.me.y)) {
+                return [game.move(nx-game.me.x, ny-game.me.y), null];
+            }
+        }
+    }
+
+    // If we've reached the target then we must be all clear by now, so this path is
+    // impossible. So... we must be pretty far.
+    game.log("voyaging");
+    var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, friends.concat({x:target[0],y:target[1]})); // don't step on the target 
+    if (nx !== null && nx !== game.me.x || ny !== game.me.y) {
+        return [game.move(nx - game.me.x, ny - game.me.y), null];
+    }
 }
 
 export function turtle(game, steps, matrix, enemies, predators, prey, blindspot, friends) {
@@ -132,7 +73,7 @@ export function turtle(game, steps, matrix, enemies, predators, prey, blindspot,
 
     // Priority 2: Turtling
     if (!action && !msg) {
-        var [action, msg] = turtle_move(game, steps, matrix, enemies, friends);
+        var [action, msg] = _turtle.turn(game, steps, matrix, enemies, friends);
     }
 
     return [action, msg];

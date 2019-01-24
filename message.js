@@ -28,6 +28,8 @@ const TYPEMAP = {
     start_assult: 0b101,
 
     emission: 0b110, 
+
+    endgame: 0b111,
 };
 
 // signed messages ensure that during the chaos of battle,

@@ -45,7 +45,7 @@ export function on_birth(game, steps, id, unit) {
     else worker_health += SPECS.UNITS[unit].STARTING_HP;
 }
 
-export function on_ping(game, steps, id, loc) {
+export function on_ping(game, steps, unit, id, loc) {
     known_friends[id].x = loc[0];
     known_friends[id].y = loc[1];
 
@@ -81,7 +81,7 @@ export function on_death(game, steps, id) {
     if (!(id in known_friends)) {
         game.log("death from the dead:");
         game.log(id);
-        game.log(known_friends);
+        return;
     }
 
     var unit = known_friends[id].unit;
@@ -94,7 +94,7 @@ export function on_death(game, steps, id) {
     if (unit === SPECS.CASTLE || unit === SPECS.CHURCH) {
         if ("x" in known_friends[id]) {
             var x = known_friends[id].x, y = known_friends[id].y;
-            util.iterlocs(game.map[0].length, game.map.length, loc, farm.RESOURCE_MAX_R, (x, y) => {
+            utils.iterlocs(game.map[0].length, game.map.length, loc, farm.RESOURCE_MAX_R, (x, y) => {
                 if (game.karbonite_map[y][x]) delete karbonite_control[y*64+x];
                 if (game.fuel_map[y][x]) delete fuel_control[y*64+x];
             });

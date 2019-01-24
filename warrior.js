@@ -27,3 +27,13 @@ export function listen_orders(game, vipid) {
 export function is_warrior(unit) {
     return unit===SPECS.CRUSADER || unit===SPECS.PROPHET || unit===SPECS.PREACHER;
 }
+
+export function done_attacking(game, steps, enemies, friends, target) {
+    if (enemies.length) return false;
+
+    // We should be in the thick of it and clear the area
+    if (utils.dist([game.me.x, game.me.y], target) > SPECS.UNITS[game.me.unit].VISION_RADIUS *2/3) return false;
+
+    // no enemies and we're at the target? all OK.
+    return true;
+}

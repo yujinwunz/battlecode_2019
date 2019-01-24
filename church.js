@@ -6,6 +6,8 @@ import * as warrior from 'warrior.js';
 
 import * as farm from 'farm.js';
 
+const BACKUP_DELAY = 5;
+
 export function listen_orders(game) {
     var orders = [];
     game.getVisibleRobots().forEach(r => {
@@ -54,7 +56,28 @@ var pendingorders = [];
 var max_escorts = 0;
 var target_escorts = 0;
 
+var last_call_on = -(1<<30);
+
 function defense(game, steps, enemies, friends) {
+    var msg = null;
+
+    // Do we need to call for backup?
+    if (steps > last_call_on + BACKUP_DELAY) {
+        var closest = utils.argmax(enemies, f => {
+            if (!warrior.is_warrior(f.unit)) return null;
+            return -utils.dist([game.me.x, game.me.y], [f.x, f.y]);
+        });
+
+        if (closest) {
+            if (utils.dist([closest.x, closest.y], [game.me.x, game.me.y]) <= 64) {
+                last_call_on = steps;
+                game.log("requesting assistance");
+                // yes. Yes we do.
+                msg = [new Message("attack", closest.x, closest.y), 64];
+            }
+        }
+    }
+
     var escorts = 0;
     friends.forEach(r => {
         if (warrior.is_warrior(r.unit)) escorts += 1;
@@ -92,10 +115,10 @@ function defense(game, steps, enemies, friends) {
         });
 
         if (turtle[0] !== null) {
-            return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), null];
+            return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
         }
     }
-    return [null, null];
+    return [null, msg];
 }
 
 export function turn(game, steps, enemies, friends, orders) {

@@ -109,7 +109,7 @@ function init_castle_talk(game) {
 }
 
 function read_castle_talk(game, steps) {
-    castleutils.receive(game.getVisibleRobots(), (i, u) => castle.on_birth(game, steps, i, u), (id, msg) => {
+    castleutils.receive(game.getVisibleRobots(), (i, u) => castle.on_birth(game, steps, i, u), (id, unit, msg) => {
         var omsg = msg;
         var type = msg % (1*Math.pow(2, CASTLE_TALK_TYPE_BITS));
         msg = Math.floor(msg/Math.pow(2, CASTLE_TALK_TYPE_BITS));
@@ -119,7 +119,7 @@ function read_castle_talk(game, steps) {
             var y = msg % (1*Math.pow(2, message.COORD_BITS));
             msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
             var x = msg % (1*Math.pow(2, message.COORD_BITS));
-            castle.on_ping(game, steps, id, [x, y]);
+            castle.on_ping(game, steps, unit, id, [x, y]);
         } else if (type === CASTLE_TALK_REPORT_ENEMY) {
             var y = msg % (1*Math.pow(2, message.COORD_BITS));
             msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
@@ -169,12 +169,17 @@ class MyRobot extends BCAbstractRobot {
                 init_castle_talk(this);
             } else if (warrior.is_warrior(this.me.unit)) {
                 var _home = utils.get_home(this, friends);     
-                vipid = _home.id;
-                target = [_home.x, _home.y];
-                target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.SPRINT);
+                if (_home) {
+                    vipid = _home.id;
+                    target = [_home.x, _home.y];
+                } else {
+                    vipid = 0;
+                    target = [game.me.x, game.me.y];
+                }
+                target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.WALK); // Slow gait for less fuel and more grouping. Rushes don't need to be... well... rushed.
             }
-            this.fuel_target = 50;
-            this.karbonite_target = 20;
+            this.fuel_target = 100;
+            this.karbonite_target = 75;
             for (var x = 0; x < this.map[0].length; x++) {
                 for (var y = 0; y < this.map.length; y++) {
                     if (this.karbonite_map[y][x]) this.karbonite_squares++;
@@ -199,6 +204,7 @@ class MyRobot extends BCAbstractRobot {
                     this.log("got new emission request " + msg.karbonite + " " + msg.fuel);
                     this.fuel_target = macro.FUEL_LEVELS[msg.fuel];
                     this.karbonite_target = macro.KARBONITE_LEVELS[msg.karbonite];
+                    this.log("Targets now at " + this.karbonite_target + " " + this.fuel_target);
                 } else if (msg.type === "void_signature" || msg.type === "void") this.log("bad msg from " + f.id + " " + f.signal);
             }
         });
@@ -248,23 +254,20 @@ class MyRobot extends BCAbstractRobot {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
                     crusader_state = warrior.ATTACKING;
-                } else if (o.type === "requesting_backup") {
-                    vipid = o.sender.id;
-                    target = [o.sender.x, o.sender.y];
-                    target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
-                    crusader_state = warrior.PROTECTING;
-                } else if (o.type === "turtle") {
-                    // TODO
-                    crusader_state = warrior.TURTLING;
                 }
             });
+
+            if (crusader_state === warrior.ATTACKING) {
+                if (warrior.done_attacking(this, steps, enemies, friends, target)) {
+                    this.log("area clear");
+                    crusader_state = warrior.TURTLING;
+                }
+            }
 
             if (crusader_state === warrior.ATTACKING) {
                 var [action, msg] = crusader.attack(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
             } else if (crusader_state === warrior.TURTLING) {
                 var [action, msg] = crusader.turtle(this, steps, matrix, enemies, predators, prey, friends);
-            } else if (crusader_state === warrior.PROTECTING) {
-                var [action, msg] = crusader.protect(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
             }
         } else if (this.me.unit === SPECS.PROPHET) {
             var orders = warrior.listen_orders(this, vipid);
@@ -273,24 +276,21 @@ class MyRobot extends BCAbstractRobot {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     prophet_state = warrior.ATTACKING;
-                } else if (o.type === "requesting_backup") {
-                    vipid = o.sender.id;
-                    target = [o.sender.x, o.sender.y];
-                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
-                    prophet_state = warrior.PROTECTING;
-                } else if (o.type === "turtle") {
-                    // TODO
-                    prophet_state = warrior.TURTLING;
                 }
             });
 
             if (prophet_state === warrior.ATTACKING) {
+                if (warrior.done_attacking(this, steps, enemies, friends, target)) {
+                    this.log("area clear");
+                    prophet_state = warrior.TURTLING;
+                }
+            }
+            if (prophet_state === warrior.ATTACKING) {
                 var [action, msg] = prophet.attack(this, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail);
             } else if (prophet_state === warrior.TURTLING) {
                 var [action, msg] = prophet.turtle(this, steps, matrix, enemies, predators, prey, blindspot, friends);
-            } else if (prophet_state === warrior.PROTECTING) {
-                var [action, msg] = prophet.protect(this, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail);
             }
+
         } else if (this.me.unit === SPECS.PREACHER) {
             var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
