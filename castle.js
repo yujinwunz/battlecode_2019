@@ -4,6 +4,7 @@ import * as castleutils from 'castleutils.js';
 import * as utils from 'utils.js';
 import {launch_expedition as launch_expedition} from 'church.js';
 import {Message, decode} from 'message.js';
+import * as warrior from 'warrior.js';
 
 const EXPAND = 0;
 const DEPLOY_TURTLE = 1;
@@ -111,27 +112,59 @@ function get_unused_churches(game, steps) {
         });
         var code = getcode([EXPAND, c]); // to avoid having to wait for one
                                                   // to finish before building another
-        if (code in throttle && throttle[code] > steps) {
-            // Don't overload. Keep # throttles at 3 max
-            var numthrottles = 0;
-            for (var k in throttle) {
-                if (throttle[k] > steps) numthrottles++;
-            }
-            if (numthrottles < 2) ok = false;
-        }
         if (ok) churches_to_go.push(c);
     })
 
     return churches_to_go;
 }
 
+function is_enemy_fortified(loc) {
+    var fortification = 0;
+    for (var eid in known_enemies) {
+        var e = known_enemies[eid];
+        if (warrior.is_warrior(e.unit) || e.unit === SPECS.CASTLE) {
+            if (utils.dist([e.x, e.y], loc) < 100) fortification ++;
+        }
+    }
+    return fortification;
+}
+
+// if it is fortified, this function is irrelevant.
+function is_enemy_occupied(loc) {
+    var occupation = 0;
+    for (var eid in known_enemies) {
+        var e = known_enemies[eid];
+        if (utils.dist([e.x, e.y], loc) < 50) occupation++;
+    }
+    return occupation;
+}
+
 function canonical_strategic_move(game, steps, known_stations) {
     // Consider building churches.
     var to_build_list = get_unused_churches(game, steps);
+
+    // To choose a next place, consider A) if it's fortified B) if it's occupied
+    // If it's fortified or occupied, we must clear it first. Then we expand later.
+
+    // Finally, don't build on opponent side until available our sides are done.
     var to_build = utils.argmax(to_build_list, loc => {
+
+        if (is_enemy_fortified(loc)) {
+            return null;
+        }
+        if (is_enemy_occupied(loc)) {
+            return null;
+        }
+
         var mindis = (1<<30);
-        known_stations.forEach(m => mindis = Math.min(mindis, utils.dist([m.x, m.y], loc)));
-        return -mindis;
+        known_stations.forEach(m => {
+            mindis = Math.min(mindis, utils.dist([m.x, m.y], loc))
+        });
+        if (utils.on_our_side(game, loc)) {
+            return -mindis;
+        } else {
+            return -mindis - 1000;
+        }
     });
 
     if (to_build) {
@@ -191,6 +224,11 @@ function i_should_do(game, steps, smove, known_stations) {
                         utils.dist([game.me.x, game.me.y], [cx, cy])
                     ]
                 ];
+            }
+
+            // If we're going into opponent, expect to want to wait a bit longer if it fails
+            if (!utils.on_our_side(game, arg)) {
+                throttle[code] *= 3;
             }
         } else {
             // Wanted to build something but it's not my business.

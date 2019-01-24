@@ -172,7 +172,6 @@ export function receive(robots, on_birth, on_msg, on_death, game=null) {
                         unit_of_id[r.id] = unit;
                         on_birth(r.id, unit);
                     }
-                    if (game) game.log("got ct message size " + expected_size[r.id] + " unit " + unit);
                 }
             } else {
                 message_buffer[r.id] = message_buffer[r.id] + (r.castle_talk * Math.pow(2, (buffer_size[r.id]*8)));

@@ -69,7 +69,6 @@ export function mining(game, steps, matrix, target, target_trail, home, home_tra
                 return -utils.dist([x, y], home) * 1000 - utils.dist([x, y], [game.me.x, game.me.y]);
             });
             if (nx !== game.me.x || ny !== game.me.y) { 
-                game.log("moving to " + nx + " " + ny + " " + game.me.x + " " + game.me.y);
                 if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
             }
         }
@@ -80,7 +79,6 @@ export function mining(game, steps, matrix, target, target_trail, home, home_tra
         // go to work
         var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], 4, game.getVisibleRobots());
         if (nx !== game.me.x || ny !== game.me.y) {
-                game.log("moving to " + nx + " " + ny + " " + game.me.x + " " + game.me.y);
             if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
         }
     }
@@ -95,10 +93,11 @@ export function expedition(game, steps, matrix, target, trail, enemies, friends)
                            game.karbonite >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_KARBONITE);
     var on_resource = game.karbonite_map[game.me.y][game.me.x] || 
                       game.fuel_map[game.me.y][game.me.x];
+    var can_build = !utils.robots_collide(enemies, target) && !utils.robots_collide(friends, target);
 
     // Execution
     var action = null;
-    if (next_to_target && enough_to_build) {
+    if (next_to_target && enough_to_build && can_build) {
         action = game.buildUnit(SPECS.CHURCH, target[0]-game.me.x, target[1]-game.me.y);
     } else if (next_to_target && on_resource) {
         action = game.mine();
@@ -117,7 +116,8 @@ export function expedition(game, steps, matrix, target, trail, enemies, friends)
             }
             return (-trail[y][x][0] * 1000 - trail[y][x][1]);
         });
-        action = game.move(nx-game.me.x, ny-game.me.y);
+        if (nx !== game.me.x || ny !== game.me.y)
+            action = game.move(nx-game.me.x, ny-game.me.y);
     }
     return [action, null];
 }

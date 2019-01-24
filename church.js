@@ -26,9 +26,6 @@ export function listen_orders(game) {
                     orders.push(msg);
                 }
             }
-        } else {
-            game.log("msg invalid:");
-            game.log(msg);
         }
     });
     return orders;

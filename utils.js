@@ -295,3 +295,13 @@ export function adjacent(a, b) {
     var d = dist(a, b);
     return d > 0 && d <= 2;
 }
+
+export function on_our_side(game, loc) {
+    if (game.symmetry === VERTICAL) {
+        if (game.me.team === 0) return loc[0] <= game.map[0].length/2;
+        else return loc[0] > game.map[0].length/2;
+    } else {
+        if (game.me.team === 0) return loc[1] <= game.map.length/2;
+        else return loc[1] > game.map.length/2;
+    }
+}

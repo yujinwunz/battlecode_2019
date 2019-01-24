@@ -82,8 +82,10 @@ function report_enemies(game, steps) {
         } else return null;
     });
 
+
     if (to_report) {
         if (castle_talk_queue.length === 0 || to_report.unit === SPECS.CASTLE) {
+            game.log(to_report);
             last_reported[to_report.id] = steps;
             var msg = to_report.id;
             msg = (msg * Math.pow(2, message.TYPE_BITS)) + to_report.unit;
@@ -155,17 +157,19 @@ var preacher_state = warrior.PROTECTING;
 class MyRobot extends BCAbstractRobot {
     turn() {
         steps++;
-        var castle_talk_worked = false;
-        if (castle_talk_queue.length) {
-            // Do this initailly so errors don't corrupt multipart castle talk. Only problem is timeout so bye bye
-            castle_talk_worked = true;
-            castle_talk_work(this);
+        if (report_enemies(this, steps)) {
+            // ok.
+        } else if (heartbeat(this)) {
+            // ok.
         }
+
+        castle_talk_work(this);
 
         var [enemies, predators, prey, blindspot, friends] = utils.glance(this);
 
         if (steps === 1) {
             this.log(this.me);
+            this.symmetry = utils.symmetry(this.map);
             if (this.me.unit === SPECS.CASTLE) {
                 init_castle_talk(this);
             } else if (warrior.is_warrior(this.me.unit)) {
@@ -289,16 +293,6 @@ class MyRobot extends BCAbstractRobot {
             } else if (preacher_state === warrior.PROTECTING) {
                 var [action, msg] = preacher.protect(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
             }
-        }
-
-        if (!castle_talk_worked) {
-            if (report_enemies(this, steps)) {
-                // ok.
-            } else if (heartbeat(this)) {
-                // ok.
-            }
-
-            castle_talk_work(this);
         }
 
         var elapsed = new Date().getTime()-start;
