@@ -14,6 +14,7 @@ import * as nav from 'nav.js';
 import * as utils from 'utils.js';
 
 import * as castleutils from 'castleutils.js';
+import * as macro from 'macro.js';
 
 var steps = 0;
 
@@ -35,7 +36,7 @@ function send_to_castle(game, msg) {
 
     castle_talk_queue.push((bytes * Math.pow(2, 3)) + game.me.unit);
     while (bytes--) {
-        castle_talk_queue.push(msg & 0b11111111);
+        castle_talk_queue.push(msg % 256);
         msg = Math.floor(msg / 256);
     }
 }
@@ -49,8 +50,8 @@ function heartbeat(game) {
             send_to_castle(game, CASTLE_TALK_HEARTBEAT);
         } else {
             var msg = game.me.x;
-            msg = (msg * Math.pow(2, message.COORD_BITS)) | game.me.y;
-            msg = (msg * Math.pow(2, CASTLE_TALK_TYPE_BITS)) | CASTLE_TALK_REPORT_COORD;
+            msg = (msg * Math.pow(2, message.COORD_BITS)) + game.me.y;
+            msg = (msg * Math.pow(2, CASTLE_TALK_TYPE_BITS)) + CASTLE_TALK_REPORT_COORD;
             send_to_castle(game, msg);
             last_heartbeat = [game.me.x, game.me.y];
         }
@@ -156,16 +157,11 @@ var preacher_state = warrior.PROTECTING;
 class MyRobot extends BCAbstractRobot {
     turn() {
         steps++;
-        if (report_enemies(this, steps)) {
-            // ok.
-        } else if (heartbeat(this)) {
-            // ok.
-        }
+        var start = (new Date()).getTime();
 
-        castle_talk_work(this);
+        var action = null, msg = null;
 
         var [enemies, predators, prey, blindspot, friends] = utils.glance(this);
-
         if (steps === 1) {
             this.log(this.me);
             this.symmetry = utils.symmetry(this.map);
@@ -177,12 +173,35 @@ class MyRobot extends BCAbstractRobot {
                 target = [_home.x, _home.y];
                 target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.SPRINT);
             }
+            this.fuel_target = 50;
+            this.karbonite_target = 20;
+            for (var x = 0; x < this.map[0].length; x++) {
+                for (var y = 0; y < this.map.length; y++) {
+                    if (this.karbonite_map[y][x]) this.karbonite_squares++;
+                    if (this.fuel_map[y][x]) this.fuel_squares++;
+                }
+            }
         }
 
-        var start = (new Date()).getTime();
+        if (report_enemies(this, steps)) {
+            // ok.
+        } else if (heartbeat(this)) {
+            // ok.
+        }
 
-        var action = null, msg = null;
+        castle_talk_work(this);
 
+        // Look for resource management signals
+        this.getVisibleRobots().forEach(f => {
+            if ("signal" in f && f.signal > 0 && "x" in f) {
+                var msg = decode(f.signal, f, this.me.team);
+                if (msg.type === "emission") {
+                    this.log("got new emission request " + msg.karbonite + " " + msg.fuel);
+                    this.fuel_target = macro.FUEL_LEVELS[msg.fuel];
+                    this.karbonite_target = macro.KARBONITE_LEVELS[msg.karbonite];
+                } else if (msg.type === "void_signature" || msg.type === "void") this.log("bad msg from " + f.id + " " + f.signal);
+            }
+        });
 
         var matrix;
         if (this.me.unit !== SPECS.CASTLE && this.me.unit !== SPECS.CHURCH) {

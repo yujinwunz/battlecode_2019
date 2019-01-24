@@ -142,7 +142,7 @@ export var buffer_size    = [];
 export var expected_size  = [];
 export var unit_of_id     = [];
 
-var active_ids = new Set();
+var active_ids = {};
 
 export function init_castle_talk() {
     for (var i = 0; i <= MAX_ID; i++) {
@@ -154,11 +154,11 @@ export function init_castle_talk() {
 }
 
 export function receive(robots, on_birth, on_msg, on_death, game=null) {
-    var seen = new Set();
+    var seen = {};
     robots.forEach(r => {
         if ("castle_talk" in r) {
-            seen.add(r.id);
-            active_ids.add(r.id);
+            seen[r.id] = true;
+            active_ids[r.id] = true;
             if (expected_size[r.id] === 0) {
                 // header byte
                 if (r.castle_talk !== 0) { // sometimes, units are built with
@@ -168,7 +168,7 @@ export function receive(robots, on_birth, on_msg, on_death, game=null) {
                     // castles sending an empty heartbeat.
                     var unit = r.castle_talk & 0b111;
                     expected_size[r.id] = r.castle_talk >> 3;
-                    if (unit_of_id[r.id] === null) {
+                    if (unit_of_id[r.id] === null || unit_of_id[r.id] === undefined) {
                         unit_of_id[r.id] = unit;
                         on_birth(r.id, unit);
                     }
@@ -186,9 +186,9 @@ export function receive(robots, on_birth, on_msg, on_death, game=null) {
         }
     });
 
-    active_ids.forEach(i => {
-        if (!seen.has(i)) on_death(i);
-    });
+    for (var i in active_ids) {
+        if (!(i in seen)) on_death(i);
+    }
 
     active_ids = seen;
 }

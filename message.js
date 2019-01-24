@@ -9,6 +9,9 @@ export const CHECKSUM_BITS = 4;
 export const CHECKSUM_MASK = ((1<<CHECKSUM_BITS)-1);
 export const CHECKSUM_VALUE = 0b0101; // Any random value plz
 
+export const KARBONITE_LEVEL_BITS = 4;
+export const FUEL_LEVEL_BITS = 4;
+
 export const UNIT_FILTER_BITS = 6;
 
 export const SEED_BITS = 9;
@@ -23,6 +26,8 @@ const TYPEMAP = {
 
     start_expedition: 0b100,
     start_assult: 0b101,
+
+    emission: 0b110, 
 };
 
 // signed messages ensure that during the chaos of battle,
@@ -37,6 +42,8 @@ const SIGNEDMAP = {
 
     start_expedition: false, // to church: Send a pilgrim there. To signify which church, only works when radio signal is exactly the distance!!!!! OMG Radio radius is information
     start_assult: false,     // to church: Launch assult here 
+
+    emission: true,
 };
 
 function gen_checksum(msg, id, team) {
@@ -76,6 +83,9 @@ export class Message {
         } else if (this.type === "start_expedition" || this.type === "start_assult") {
             this.x = arguments[1];
             this.y = arguments[2];
+        } else if (this.type === "emission") {
+            this.karbonite = arguments[1];
+            this.fuel = arguments[2];
         } else if (this.type === "void" || this.type === "void_signature") {
             // Message from other team or malformed message
         } else {
@@ -102,9 +112,12 @@ export class Message {
         } else if (this.type === "start_expedition" || this.type === "start_assult") {
             msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
+        } else if (this.type === "emission") {
+            msg |= (this.karbonite << (16 - TYPE_BITS - KARBONITE_LEVEL_BITS));
+            msg |= (this.fuel << (16 - TYPE_BITS - KARBONITE_LEVEL_BITS - FUEL_LEVEL_BITS));
         }
 
-        if (SIGNEDMAP[this.signed]) {
+        if (SIGNEDMAP[this.type]) {
             if (msg & CHECKSUM_MASK) throw "signed message overflow";
             msg = msg | gen_checksum(msg, id, team);
         }
@@ -148,6 +161,11 @@ export function decode(rawmsg, frombot, team) {
         var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         msg = new Message("start_assult", x, y);
         signed = false; 
+    } else if (type === TYPEMAP.emission) {
+        var [karbonite, rawmsg] = eat_msg(rawmsg, KARBONITE_LEVEL_BITS);
+        var [fuel, rawmsg] = eat_msg(rawmsg, FUEL_LEVEL_BITS);
+        msg = new Message("emission", karbonite, fuel);
+        signed = true;
     } else {
         // invalid typecode, perhaps from enemy
         return new Message("void");
@@ -156,7 +174,7 @@ export function decode(rawmsg, frombot, team) {
     if (signed) {
         var sign = omsg & CHECKSUM_MASK;
         var thissign = gen_checksum(omsg & (~CHECKSUM_MASK), frombot.id, team);
-        if (sign != thissign) {
+        if (sign !== thissign) {
             console.log("Invalid message received with sums " + sign + " but got " + thissign);
             return new Message("void_signature");
         }

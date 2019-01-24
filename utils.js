@@ -96,7 +96,7 @@ export function glance(game) {
         
         if (r.team === game.me.team) {
             friends.push(r);
-        } else {
+        } else if (r.team === 1-game.me.team) {
             enemies.push(r);
             var dist = loc_dist([game.me.x, game.me.y], [r.x, r.y]);
             if (in_fire_range(r.unit, dist)) predators.push(r);
@@ -104,7 +104,7 @@ export function glance(game) {
             else if (game.me.unit === SPECS.PROPHET && dist < 16) {
                 blindspot.push(r);
             }
-        }
+        } else {/* discard this information for now */}
     });
 
     return [enemies, predators, prey, blindspot, friends];
@@ -144,20 +144,15 @@ export function look(game, target_id) {
 }
 
 export function get_home(game, friendly) {
-    game.log(friendly);
-    game.log(game.me.x + " " + game.me.y);
     // find mother castle/church and assume it as home.
     var retval = null;
     friendly.forEach(r => {
         if (!("x" in r)) return;
-        game.log(r);
         if (r.unit === SPECS.CASTLE || r.unit === SPECS.CHURCH) {
-            game.log("good type");
             if (dist([game.me.x, game.me.y], [r.x, r.y]) <= 2) {
-                game.log("good dist");
                 retval = r;
-            } else game.log("bad dist: " + dist([game.me.x, game.me.y], [r.x, r.y]));
-        } else game.log("bad type " + r.unit);
+            }
+        }
     });
 
     if (retval) return retval;

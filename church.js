@@ -2,6 +2,7 @@ import {BCAbstractRobot, SPECS} from 'battlecode';
 import {Message, decode} from 'message.js';
 import * as utils from 'utils.js';
 import * as nav from 'nav.js';
+import * as warrior from 'warrior.js';
 
 import * as farm from 'farm.js';
 
@@ -50,6 +51,53 @@ export function launch_expedition(game, loc) {
 
 var pendingorders = [];
 
+var max_escorts = 0;
+var target_escorts = 0;
+
+function defense(game, steps, enemies, friends) {
+    var escorts = 0;
+    friends.forEach(r => {
+        if (warrior.is_warrior(r.unit)) escorts += 1;
+    });
+    max_escorts = Math.max(escorts, max_escorts);
+    target_escorts = max_escorts;
+    
+
+    if (enemies.length) {
+        // Hard to know size of the attack. Multiply by 3 to be sure.
+        var enemy_strength = 0;
+        enemies.forEach(r => {
+            if (warrior.is_warrior(r.unit)) enemy_strength += 3;
+            else enemy_strength += 1;
+        });
+
+        target_escorts = Math.max(enemy_strength, target_escorts);
+        game.log("enemy_strength: " + enemy_strength);
+    }
+
+    var should_build = false;
+    if (target_escorts > escorts) {
+        should_build = true;
+    }
+
+    game.log("target_escorts vs me: " + target_escorts + " " + escorts);
+    game.log(enemies);
+    game.log(friends);
+
+    if (should_build) {
+        var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+            if (utils.robots_collide(friends, [x, y])) return null;
+            if (utils.robots_collide(enemies, [x, y])) return null;
+            return Math.random();
+        });
+
+        if (turtle[0] !== null) {
+            return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), null];
+        }
+    }
+    return [null, null];
+}
+
 export function turn(game, steps, enemies, friends, orders) {
     // Observe
 
@@ -70,6 +118,9 @@ export function turn(game, steps, enemies, friends, orders) {
     }
 
     // Priority 2: Defense
+    if (!action && !msg) {
+        var [action, msg] = defense(game, steps, enemies, friends, orders); 
+    }
     
     // Priority 3: Autopilot resource management
     if (!action && !msg) var [action, msg] = farm.turn(game, steps, friends);
