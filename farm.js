@@ -10,15 +10,32 @@ var assignments = null;
 
 var last_target = null;
 
-function get_a_target(game) {
+function get_a_karbonite_target(game) {
     return utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], RESOURCE_MAX_R, (x, y) => {
-        if (game.karbonite_map[y][x] || game.fuel_map[y][x]) {
+        if (game.karbonite_map[y][x]) {
             if (!assignments[y][x]) {
                 return 1;
             }
         }
         return null;
     });
+}
+
+function get_a_fuel_target(game) {
+    return utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], RESOURCE_MAX_R, (x, y) => {
+        if (game.fuel_map[y][x]) {
+            if (!assignments[y][x]) {
+                return 1;
+            }
+        }
+        return null;
+    });
+}
+
+function get_a_target(game) {
+    var ret = get_a_karbonite_target(game);
+    if (ret[0] === null) ret = get_a_fuel_target(game);
+    return ret;
 }
 
 function initialize(game) {

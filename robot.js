@@ -28,42 +28,23 @@ var last_heartbeat = [null, null];
 
 var last_reported = {};
 
-// Sends a message via the free 8 bit castle channel.
-// Because they are free, we can choose to do a nice delivery network thing.
-function send_to_castle(game, msg) {
-    var bytes = 0;
-    while (Math.pow(2, bytes*8) <= msg && bytes < 4) bytes++;
-
-    castle_talk_queue.push((bytes * Math.pow(2, 3)) + game.me.unit);
-    while (bytes--) {
-        castle_talk_queue.push(msg % 256);
-        msg = Math.floor(msg / 256);
-    }
-}
 
 // For castle talk, the type is at the end.
 
 // Lets the castle know you're still alive, and where you are.
 function heartbeat(game) {
-    if (castle_talk_queue.length === 0) {
-        if (game.me.x === last_heartbeat[0] && game.me.y === last_heartbeat[1]) {
-            send_to_castle(game, CASTLE_TALK_HEARTBEAT);
-        } else {
-            var msg = game.me.x;
-            msg = (msg * Math.pow(2, message.COORD_BITS)) + game.me.y;
-            msg = (msg * Math.pow(2, CASTLE_TALK_TYPE_BITS)) + CASTLE_TALK_REPORT_COORD;
-            send_to_castle(game, msg);
-            last_heartbeat = [game.me.x, game.me.y];
-        }
+    if (game.me.turn === 1) {
+        game.castleTalk(64 + game.me.unit);
         return true;
-    } return false;
-}
-
-function castle_talk_work(game) {
-    if (castle_talk_queue.length) {
-        game.castleTalk(castle_talk_queue[0]);
-        castle_talk_queue.shift();
     }
+    if (game.me.turn % 2 === 0) {
+        game.castleTalk(64 + game.me.x); // 64 is to avoid sending 0, reserved for error.
+        game.last_reported_x = game.me.x;
+    } else {
+        game.castleTalk(64 + game.me.y);
+        game.last_reported_y = game.me.y;
+    }
+    return true;
 }
 
 function report_enemies(game, steps) {
@@ -84,18 +65,24 @@ function report_enemies(game, steps) {
     });
 
 
-    if (to_report) {
-        if (castle_talk_queue.length === 0 || to_report.unit === SPECS.CASTLE) {
-            last_reported[to_report.id] = steps;
-            var msg = to_report.id;
-            msg = (msg * Math.pow(2, message.TYPE_BITS)) + to_report.unit;
-            msg = (msg * Math.pow(2, message.COORD_BITS)) + to_report.x;
-            msg = (msg * Math.pow(2, message.COORD_BITS)) + to_report.y;
-            msg = (msg * Math.pow(2, CASTLE_TALK_TYPE_BITS)) + CASTLE_TALK_REPORT_ENEMY;
-            
-            send_to_castle(game, msg);
-            return true;
+    if (to_report && "last_reported_x" in game && "last_reported_y" in game) {
+        last_reported[to_report.id] = steps;
+        
+        var dx = to_report.x - game.me.x;
+        var dy = to_report.y - game.me.y;
+        dx = Math.max(-7, Math.min(8, dx)) + 7;
+        dy = Math.max(-7, Math.min(8, dy)) + 7;
+        dx = Math.floor(dx/2);
+        dy = Math.floor(dy/2);
+
+        if (warrior.is_warrior(to_report.unit)) {
+            game.log("reporting warrior at " + to_report.x + " " + to_report.y);
+            game.castleTalk(128 + 64 + dx*8 + dy);
+        } else {
+            game.log("reporting civilian");
+            game.castleTalk(128 + dx*8 + dy);
         }
+        return true;
     }
     return false;
 }
@@ -109,31 +96,32 @@ function init_castle_talk(game) {
 }
 
 function read_castle_talk(game, steps) {
-    castleutils.receive(game.getVisibleRobots(), (i, u) => castle.on_birth(game, steps, i, u), (id, unit, msg) => {
-        var omsg = msg;
-        var type = msg % (1*Math.pow(2, CASTLE_TALK_TYPE_BITS));
-        msg = Math.floor(msg/Math.pow(2, CASTLE_TALK_TYPE_BITS));
-        if (type === CASTLE_TALK_HEARTBEAT) {
-            // pass
-        } else if (type === CASTLE_TALK_REPORT_COORD) {
-            var y = msg % (1*Math.pow(2, message.COORD_BITS));
-            msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
-            var x = msg % (1*Math.pow(2, message.COORD_BITS));
-            castle.on_ping(game, steps, unit, id, [x, y]);
-        } else if (type === CASTLE_TALK_REPORT_ENEMY) {
-            var y = msg % (1*Math.pow(2, message.COORD_BITS));
-            msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
-            var x = msg % (1*Math.pow(2, message.COORD_BITS));
-            msg = Math.floor(msg/Math.pow(2, message.COORD_BITS));
-            var unit = msg % (1*Math.pow(2, message.TYPE_BITS));
-            msg = Math.floor(msg/Math.pow(2, message.TYPE_BITS));
-            var eid = msg % (1*Math.pow(2, message.ID_BITS));
-            castle.on_sighting(game, steps, id, eid, [x, y], unit);
-        } else {
-            // how?
-            game.log("Impossibly invalid castle talk " + omsg + " from " + id);
+    castleutils.receive(game.getVisibleRobots(), (r, msg) => {
+        if (msg === 0) {
+            game.log("untrusted message from " + r.id);
+            return;
         }
-    }, i => castle.on_death(game, steps, i), game);
+        if (msg >= 128) {
+            // report enemy
+            msg -= 128;
+            if (msg > 64) {
+                // attacking enemy
+                msg -= 64;
+                castle.on_warrior_sighting(game, steps, r, Math.floor(msg/8)%8, msg%8);
+            } else {
+                // civilian enemy
+                castle.on_civilian_sighting(game, steps, r, Math.floor(msg/8)%8, msg%8);
+            }
+        } else {
+            if (r.turn === 1) {            // reporting in
+                castle.on_birth(game, r, msg - 64); 
+            } else if (r.turn % 2 === 0) { // report x
+                castle.on_ping(game, r, [msg%64, null]);
+            } else {                       // report y
+                castle.on_ping(game, r, [null, msg%64]);
+            }
+        }
+    }, i => castle.on_death(game, i), game);
 }
 
 function build_matrix() {
@@ -195,8 +183,6 @@ class MyRobot extends BCAbstractRobot {
             // ok.
         }
 
-        castle_talk_work(this);
-
         // Look for resource management signals
         this.getVisibleRobots().forEach(f => {
             if ("signal" in f && f.signal > 0 && "x" in f) {
@@ -238,6 +224,7 @@ class MyRobot extends BCAbstractRobot {
                     if (pilgrim_state === pilgrim.MINING) return;
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, []);
+                    this.log("sending pilgrim to build church. home is now " + o.sender.x + " " + o.sender.y);
                     home = [o.sender.x, o.sender.y];
                     home_trail = nav.build_map(this.map, home, 4, nav.GAITS.SPRINT, []);
                     pilgrim_state = pilgrim.EXPEDITION;
@@ -250,7 +237,7 @@ class MyRobot extends BCAbstractRobot {
             } else if (pilgrim_state === pilgrim.MINING) {
                 var [action, msg] = pilgrim.mining(this, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
             } else if (pilgrim_state === pilgrim.EXPEDITION) {
-                var [action, msg] = pilgrim.expedition(this, steps, matrix, target, target_trail, enemies, friends);
+                var [action, msg] = pilgrim.expedition(this, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
             }
         } else if (this.me.unit === SPECS.CRUSADER) {
             var orders = warrior.listen_orders(this, vipid);
@@ -307,15 +294,23 @@ class MyRobot extends BCAbstractRobot {
             orders.forEach(o => {
                 if (o.type === "attack" || o.type === "castle_distress") {
                     target = [o.x, o.y];
-                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
+                    target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
                     preacher_state = warrior.ATTACKING;
                 }
+                if (o.type === "castle_distress") this.last_castle_distress = steps;
             });
 
             if (preacher_state === warrior.ATTACKING) {
+                if (warrior.done_attacking(this, steps, enemies, friends, target)) {
+                    this.log("area clear");
+                    preacher_state = warrior.TURTLING;
+                }
+            }
+
+            if (preacher_state === warrior.ATTACKING) {
                 var [action, msg] = preacher.attack(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
-            } else if (preacher_state === warrior.PROTECTING) {
-                var [action, msg] = preacher.protect(this, steps, matrix, enemies, predators, prey, friends, target, target_trail);
+            } else if (preacher_state === warrior.TURTLING) {
+                var [action, msg] = preacher.turtle(this, steps, matrix, enemies, predators, prey, friends);
             }
         }
 

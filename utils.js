@@ -82,9 +82,7 @@ export function threat_level(game, r) {
     var hp_per_hit = SPECS.UNITS[r.unit].ATTACK_DAMAGE / hp;
     var in_range = (game.me.x-r.x)*(game.me.x-r.x) + (game.me.y-r.y)*(game.me.y-r.y) <= SPECS.UNITS[r.unit].ATTACK_RANGE;
 
-    game.log(r);
-    game.log("threat " + ((hp_per_hit*1000000) + (r.turn)));
-    return /*(in_range<<10) +*/ ((hp_per_hit*100000) + (r.turn));
+    return (in_range*1000000) + ((hp_per_hit*1000) + (r.turn));
 }
 
 export function glance(game) {

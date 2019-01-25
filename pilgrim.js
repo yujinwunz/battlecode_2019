@@ -91,7 +91,7 @@ export function mining(game, steps, matrix, target, target_trail, home, home_tra
     return [action, null]; 
 }
 
-export function expedition(game, steps, matrix, target, trail, enemies, friends) {
+export function expedition(game, steps, matrix, target, trail, home, home_trail, enemies, friends) {
     // Observation
     var next_to_target = (utils.adjacent(target, [game.me.x, game.me.y]));
     var enough_to_build = (game.fuel >= SPECS.UNITS[SPECS.CHURCH].CONSTRUCTION_FUEL &&
@@ -99,11 +99,48 @@ export function expedition(game, steps, matrix, target, trail, enemies, friends)
     var on_resource = game.karbonite_map[game.me.y][game.me.x] || 
                       game.fuel_map[game.me.y][game.me.x];
     var can_build = !utils.robots_collide(enemies, target) && !utils.robots_collide(friends, target);
+    var full = (game.me.fuel >= 100 || game.me.karbonite >= 20);
+
+    // Check if the church didn't get accidentally built by someone else, so to avoid going back and forth
+    // to the home one
+    var otherhome = utils.argmax(friends, f => {
+        if (f.unit === SPECS.CHURCH && f.x === target[0] && f.y === target[1]) return 1;
+        return null;
+    })
 
     // Execution
     var action = null;
     if (next_to_target && enough_to_build && can_build && !utils.in_distress(game, steps)) {
         action = game.buildUnit(SPECS.CHURCH, target[0]-game.me.x, target[1]-game.me.y);
+    } else if (full && otherhome && next_to_target) {
+        action = game.give(otherhome.x-game.me.x, otherhome.y-game.me.y);
+    } else if (full && !enough_to_build) {
+        game.log("cancelling expedition. Going back to " + home[0] + " " + home[1]);
+
+        // give resources back to base and come back again when there IS enough.
+        if (utils.adjacent(home, [game.me.x, game.me.y])) {
+            action = game.give(home[0]-game.me.x, home[1]-game.me.y, game.me.karbonite, game.me.fuel);
+        } else {
+            var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
+                if (utils.robots_collide(friends, [x, y])) return null;
+                if (utils.robots_collide(enemies, [x, y])) return null;
+                if (game.map[y][x] === false) return null;
+                if (!home_trail[y][x]) return null;
+                var attacked = false;
+                enemies.forEach(e => {
+                    if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [x, y]))) attacked = true;
+                });
+                if (attacked) return null;
+                if (utils.adjacent(home, [x, y])) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
+
+                return -(home_trail[y][x][0]*1000 + home_trail[y][x][1]);
+            });
+            if (nx !== game.me.x || ny !== game.me.y) { 
+                if (nx !== null) {
+                    action = game.move(nx-game.me.x, ny-game.me.y);
+                }
+            }
+        } 
     } else if (next_to_target && on_resource) {
         action = game.mine();
     } else {
