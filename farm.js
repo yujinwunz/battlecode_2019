@@ -97,3 +97,16 @@ export function turn(game, enemies, friends) {
 
     return [action, msg];
 }
+
+export function execute_order_66(game) {
+    game.log("EXECUTING ORDER 66");
+    var target = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+        if (game.map[y][x] === false) return null;
+        if (utils.robots_collide(game.getVisibleRobots(), [x, y])) return null;
+        return Math.random();
+    });
+
+    if (target[0] !== null) {
+        return [game.buildUnit(SPECS.CRUSADER, target[0]-game.me.x, target[1]-game.me.y), null];
+    }
+}

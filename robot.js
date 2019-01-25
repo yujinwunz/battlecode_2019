@@ -150,9 +150,9 @@ var vipid = -1;
 var pilgrim_state = pilgrim.ORPHAN;
 
 // Crusader state
-var crusader_state = warrior.PROTECTING;
+var crusader_state = warrior.TURTLING;
 var prophet_state = warrior.TURTLING;
-var preacher_state = warrior.PROTECTING;
+var preacher_state = warrior.TURTLING;
 
 class MyRobot extends BCAbstractRobot {
     turn() {
@@ -176,10 +176,10 @@ class MyRobot extends BCAbstractRobot {
                     vipid = 0;
                     target = [game.me.x, game.me.y];
                 }
-                target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.WALK); // Slow gait for less fuel and more grouping. Rushes don't need to be... well... rushed.
+                //target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.WALK); // Slow gait for less fuel and more grouping. Rushes don't need to be... well... rushed.
             }
             this.fuel_target = 100;
-            this.karbonite_target = 75;
+            this.karbonite_target = 100;
             for (var x = 0; x < this.map[0].length; x++) {
                 for (var y = 0; y < this.map.length; y++) {
                     if (this.karbonite_map[y][x]) this.karbonite_squares++;

@@ -29,7 +29,7 @@ const TYPEMAP = {
 
     emission: 0b110, 
 
-    endgame: 0b111,
+    order66: 0b111, // Command all building units to spam crusaders
 };
 
 // signed messages ensure that during the chaos of battle,
@@ -46,6 +46,8 @@ const SIGNEDMAP = {
     start_assult: false,     // to church: Launch assult here 
 
     emission: true,
+
+    order66: true,
 };
 
 function gen_checksum(msg, id, team) {
@@ -88,6 +90,8 @@ export class Message {
         } else if (this.type === "emission") {
             this.karbonite = arguments[1];
             this.fuel = arguments[2];
+        } else if (this.type === "order66") {
+            // everyone knows what order66 is
         } else if (this.type === "void" || this.type === "void_signature") {
             // Message from other team or malformed message
         } else {
@@ -117,6 +121,8 @@ export class Message {
         } else if (this.type === "emission") {
             msg |= (this.karbonite << (16 - TYPE_BITS - KARBONITE_LEVEL_BITS));
             msg |= (this.fuel << (16 - TYPE_BITS - KARBONITE_LEVEL_BITS - FUEL_LEVEL_BITS));
+        } else if (this.type === "order66") {
+            // self explanatory
         }
 
         if (SIGNEDMAP[this.type]) {
@@ -167,6 +173,9 @@ export function decode(rawmsg, frombot, team) {
         var [karbonite, rawmsg] = eat_msg(rawmsg, KARBONITE_LEVEL_BITS);
         var [fuel, rawmsg] = eat_msg(rawmsg, FUEL_LEVEL_BITS);
         msg = new Message("emission", karbonite, fuel);
+        signed = true;
+    } else if (type === TYPEMAP.order66) {
+        msg = new Message("order66");
         signed = true;
     } else {
         // invalid typecode, perhaps from enemy

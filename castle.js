@@ -10,8 +10,9 @@ import * as macro from 'macro.js';
 const EXPAND = 0;
 const DEPLOY_TURTLE = 1;
 const RESOURCE_TARGETS = 2;
+const ENDGAME_POSSIBLE_THRESHOLD = 800;
 
-const MOBILE_ENEMY_DECAY = 40; // without seeing an enemy for that long assume it's dead
+const MOBILE_ENEMY_DECAY = 30; // without seeing an enemy for that long assume it's dead
 
 var known_friends = {};
 var castles_remaining = 0;
@@ -28,6 +29,8 @@ var worker_health = 0;
 
 var karbonite_control = {};
 var fuel_control = {};
+
+var implied_enemy_castles = null;
 
 // These are received before turn is called.
 export function on_birth(game, steps, id, unit) {
@@ -69,9 +72,15 @@ export function on_ping(game, steps, unit, id, loc) {
         if (utils.dist([x, y], loc) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS) {
             // castle/church from enemy not seen.
             game.log("Observed the death of enemy station " + i);
-            game.log(known_enemies[i]);
-            if (knwon_enemies[i].unit === SPECS.CASTLE) enemy_castles_remaining--;
-            delete known_enemies[i];
+            game.log("" + known_enemies[i]);
+            if (i in known_enemies) {
+                if (known_enemies[i].unit === SPECS.CASTLE) enemy_castles_remaining--;
+                delete known_enemies[i];
+            }
+
+            if (u === SPECS.CASTLE) {
+                implied_enemy_castles = implied_enemy_castles.filter(f => f[0] !== x || f[1] !== y);
+            }
         } else newlist.push([i, u, x, y]);
     });
     known_enemy_stations = newlist;
@@ -94,7 +103,7 @@ export function on_death(game, steps, id) {
     if (unit === SPECS.CASTLE || unit === SPECS.CHURCH) {
         if ("x" in known_friends[id]) {
             var x = known_friends[id].x, y = known_friends[id].y;
-            utils.iterlocs(game.map[0].length, game.map.length, loc, farm.RESOURCE_MAX_R, (x, y) => {
+            utils.iterlocs(game.map[0].length, game.map.length, [x, y], farm.RESOURCE_MAX_R, (x, y) => {
                 if (game.karbonite_map[y][x]) delete karbonite_control[y*64+x];
                 if (game.fuel_map[y][x]) delete fuel_control[y*64+x];
             });
@@ -108,12 +117,17 @@ export function on_death(game, steps, id) {
 
 // Sighting of an enemy
 export function on_sighting(game, steps, id, eid, loc, unit) {
+    if (eid === 0) {
+        game.log("Corrupted sighting by " + id + " of " + id + " " + unit + " at " + loc[0] + " " + loc[1]);
+        return;
+    }
     game.log("Enemy sighted by " + id + " of " + eid + " at " + loc[0] + " " + loc[1] + " type " + unit);
 
+    var isnew = !(eid in known_enemies);
     known_enemies[eid] = {eid, unit, x:loc[0], y:loc[1], last_seen:steps};
     if (unit === SPECS.CASTLE || unit === SPECS.CHURCH) {
         // stationary target
-        known_enemy_stations.push([eid, unit, loc[0], loc[1]]);
+        if (isnew) known_enemy_stations.push([eid, unit, loc[0], loc[1]]);
     } else {
         mobile_enemy_sightings.push([eid, steps]);
     }
@@ -135,7 +149,6 @@ function prune_known_enemies(game, steps) {
 var church_locs = null;
 var group_locs = null;
 var symmetry = null;
-var implied_enemy_castles = null;
 
 function filter_known_friends(f) {
     var res = [];
@@ -166,9 +179,6 @@ function get_unused_churches(game, steps) {
         known_churches.forEach(kc => {
             if (utils.dist(c, [kc.x, kc.y]) < farm.RESOURCE_MAX_R) ok = false;
         });
-        implied_enemy_castles.forEach(kl => {
-            if (utils.dist(c, kl) < farm.RESOURCE_MAX_R) ok = false;
-        });
         var code = getcode([EXPAND, c]); // to avoid having to wait for one
                                                   // to finish before building another
         if (ok) churches_to_go.push(c);
@@ -182,9 +192,12 @@ function is_enemy_fortified(loc) {
     for (var eid in known_enemies) {
         var e = known_enemies[eid];
         if (warrior.is_warrior(e.unit) || e.unit === SPECS.CASTLE) {
-            if (utils.dist([e.x, e.y], loc) < 100) fortification ++;
+            if (utils.dist([e.x, e.y], loc) < 64) fortification ++;
         }
     }
+    implied_enemy_castles.forEach(kl => {
+        if (utils.dist(loc, kl) < farm.RESOURCE_MAX_R) fortification += 4;
+    });
     return fortification;
 }
 
@@ -193,7 +206,7 @@ function is_enemy_occupied(loc) {
     var occupation = 0;
     for (var eid in known_enemies) {
         var e = known_enemies[eid];
-        if (utils.dist([e.x, e.y], loc) < 50) occupation++;
+        if (utils.dist([e.x, e.y], loc) < 36) occupation++;
     }
     return occupation;
 }
@@ -204,11 +217,13 @@ function canonical_strategic_move(game, steps, known_stations) {
     var [kgoal, fgoal] = macro.recommend_params(game, steps, castles_remaining, enemy_castles_remaining, game.karbonite_squares,
         game.fuel_squares, Object.keys(karbonite_control).length, Object.keys(fuel_control).length, warrior_health, worker_health);
     
-    if (Math.abs(kgoal - game.karbonite_target) / Math.min(kgoal, game.karbonite_target) > 1) {
+    if (Math.abs(kgoal - game.karbonite_target) / Math.min(kgoal, game.karbonite_target) > 0.5) {
         if (Math.abs(fgoal - game.fuel_target) / Math.min(fgoal, game.fuel_target) > 0.5) {
             if (steps >= 50) {
-                game.log("Updating emission targets to " + kgoal + " " + fgoal);
-                if (steps % 10 === 0) return [RESOURCE_TARGETS, [kgoal, fgoal]];
+                if (steps % 10 === 0) {
+                    game.log("Updating emission targets to " + kgoal + " " + fgoal);
+                    return [RESOURCE_TARGETS, [kgoal, fgoal]];
+                }
             }
         }
     }
@@ -223,9 +238,11 @@ function canonical_strategic_move(game, steps, known_stations) {
     var to_build = utils.argmax(to_build_list, loc => {
 
         if (is_enemy_fortified(loc)) {
+            game.log(steps + " is fortified: " + loc[0] + " " + loc[1] + ": " + is_enemy_fortified(loc));
             return null;
         }
         if (is_enemy_occupied(loc)) {
+            game.log(steps + " is occupied: " + loc[0] + " " + loc[1] + ": " + is_enemy_occupied(loc));
             return null;
         }
 
@@ -241,9 +258,11 @@ function canonical_strategic_move(game, steps, known_stations) {
     });
 
     if (to_build) {
+        game.log("Considering building at " + to_build[0] + " " + to_build[1]);
         return [EXPAND, to_build]; 
     }
 
+    game.log("No strategic decision");
     // Returns a strategic decision (not move). It's up to the caller to implement that.
 }
 
@@ -356,10 +375,32 @@ function init_implied_castles(game) {
 
 var max_escorts = 0;
 var target_escorts = 0;
+var last_call_on = -(1<<30);
 
 const CRITICAL_MASS = 100;
+const BACKUP_DELAY = 5;
 
 function defense(game, steps, enemies, predators, prey, friends) {
+    var msg = null;
+
+    // check if we need our bots to back us up
+    // Do we need to call for backup?
+    if (steps > last_call_on + BACKUP_DELAY) {
+        var closest = utils.argmax(enemies, f => {
+            if (!warrior.is_warrior(f.unit)) return null;
+            return -utils.dist([game.me.x, game.me.y], [f.x, f.y]);
+        });
+
+        if (closest) {
+            if (utils.dist([closest.x, closest.y], [game.me.x, game.me.y]) <= 64) {
+                last_call_on = steps;
+                game.log("requesting assistance");
+                // yes. Yes we do.
+                msg = [new Message("attack", closest.x, closest.y), 64];
+            }
+        }
+    }
+
     // Calculate how much castles / churches should have.
     // Calculate how much of it goes to my castle.
     // Calculate what I have.
@@ -443,30 +484,44 @@ function defense(game, steps, enemies, predators, prey, friends) {
     if (should_build) {
         game.log("decided to build.");
         var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+            if (game.map[y][x] === false) return null;
             if (utils.robots_collide(friends, [x, y])) return null;
             if (utils.robots_collide(enemies, [x, y])) return null;
             return Math.random();
         });
 
         if (turtle[0] !== null) {
-            return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), null];
+            return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
         }
     }
 
     // didn't build. Try just attacking
     if (prey.length) {
         game.log("default to attacking");
-        var tohit = utils.argmax(prey, f => utils.threat_level(game, r));
-        return [game.attack(tohit.x-game.me.x, tohit.y-game.me.y), null];
+        var tohit = utils.argmax(prey, r => utils.threat_level(game, r));
+        return [game.attack(tohit.x-game.me.x, tohit.y-game.me.y), msg];
     }
 
-    return [null, null];
+    return [null, msg];
 }
 
+var order_66 = false;
+
 export function turn(game, steps, enemies, predators, prey, friends) {
+    if (order_66) {
+        return farm.execute_order_66(game);
+    }
     // Observe
     if (church_locs === null) init(game);
     prune_known_enemies(game, steps);
+    
+    if (steps > ENDGAME_POSSIBLE_THRESHOLD) { // save computing with this condition
+        var endgame = macro.is_endgame(game, steps, castles_remaining, enemy_castles_remaining, known_friends);
+        if (endgame) {
+            order_66 = true;
+            return [null, [new Message("order66"), game.map.length*game.map.length]];
+        }
+    }
     
     // Execute
     var action = null, msg = null;

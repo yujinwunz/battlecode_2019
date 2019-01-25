@@ -8,6 +8,8 @@ import * as farm from 'farm.js';
 
 const BACKUP_DELAY = 5;
 
+var order_66 = false;
+
 export function listen_orders(game) {
     var orders = [];
     game.getVisibleRobots().forEach(r => {
@@ -16,7 +18,7 @@ export function listen_orders(game) {
 
         var msg = decode(r.signal, r, game.me.team);
         // Agreed protocol: castles will only send msg with radius hitting exactly you.
-        if (msg.sender.signal_radius === utils.dist([r.x, r.y], [game.me.x, game.me.y])) {
+        if (r.signal_radius === utils.dist([r.x, r.y], [game.me.x, game.me.y])) {
             // Only accept orders from castle.
             if (msg.type === "start_expedition") {
                 game.log("Heard expedition message");
@@ -29,6 +31,12 @@ export function listen_orders(game) {
                     orders.push(msg);
                 }
             }
+        }
+
+        // Broader messages: order66
+        if (msg.type === "order66") {
+            game.log("EXECUTE ORDER 66; YES SIR");
+            orders.push(msg);
         }
     });
     return orders;
@@ -72,6 +80,7 @@ function defense(game, steps, enemies, friends) {
             if (utils.dist([closest.x, closest.y], [game.me.x, game.me.y]) <= 64) {
                 last_call_on = steps;
                 game.log("requesting assistance");
+                max_escorts += 5; // learn from previous failures
                 // yes. Yes we do.
                 msg = [new Message("attack", closest.x, closest.y), 64];
             }
@@ -86,9 +95,9 @@ function defense(game, steps, enemies, friends) {
     target_escorts = max_escorts;
     
 
+    var enemy_strength = 0;
     if (enemies.length) {
         // Hard to know size of the attack. Multiply by 3 to be sure.
-        var enemy_strength = 0;
         enemies.forEach(r => {
             if (warrior.is_warrior(r.unit)) enemy_strength += 3;
             else enemy_strength += 1;
@@ -100,15 +109,33 @@ function defense(game, steps, enemies, friends) {
 
     var should_build = false;
     if (target_escorts > escorts) {
-        should_build = true;
+        var fuel_crisis = game.fuel / game.fuel_target;
+        var karb_crisis = game.karbonite / game.karbonite_target;
+        var defense_crisis = escorts / target_escorts;
+        if (defense_crisis <= fuel_crisis && defense_crisis <= karb_crisis) 
+            should_build = true;
+        
+        //            buffer                         allow them to shoot 
+        if (escorts <= enemy_strength * 1.5 && game.fuel >= 50 + escorts*25) should_build = true;
+    }
+
+    if (game.fuel > game.fuel_target && game.karbonite > game.karbonite_target) {
+        // Randomly grow cloud when in abundance of resources. Ones in the center should be hotter.
+        var dist = 0;
+        if (game.symmetry === utils.VERTICAL) dist = Math.abs(game.map.length/2 - game.me.x);
+        else dist = Math.abs(game.map.length/2 - game.me.y);
+        
+        dist = Math.floor(dist / (game.map.length/2) * 10) + 1
+
+        if (steps % dist === game.me.id % dist) should_build = true;
     }
 
     game.log("target_escorts vs me: " + target_escorts + " " + escorts);
-    game.log(enemies);
-    game.log(friends);
+    game.log("kt k ft f " + game.karbonite_target + " " + game.karbonite + " " + game.fuel_target + " " + game.fuel);
 
     if (should_build) {
         var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+            if (game.map[y][x] === false) return null;
             if (utils.robots_collide(friends, [x, y])) return null;
             if (utils.robots_collide(enemies, [x, y])) return null;
             return Math.random();
@@ -129,15 +156,22 @@ export function turn(game, steps, enemies, friends, orders) {
     var msg = null;
     // Order your turn in priorities
     
-    // Priority 1: Fulfil new orders
+    // Priority 0: Fulfil new orders
     pendingorders = pendingorders.concat(orders);
     if (pendingorders.length) {
         var o = pendingorders[0];
         if (o.type === "start_expedition") {
             game.log("starting expedition to " + o.x + " " + o.y);
             var [action, msg] = launch_expedition(game, [o.x, o.y]);
+        } else if (o.type === "order66") {
+            order_66 = true;
         }
         pendingorders.shift();
+    }
+
+    // Priority 1: EXECUTE ORDER 66
+    if (order_66) {
+        return farm.execute_order_66(game);
     }
 
     // Priority 2: Defense

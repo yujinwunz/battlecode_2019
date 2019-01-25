@@ -60,9 +60,12 @@ export function attack(game, steps, matrix, enemies, predators, prey, blindspot,
     // impossible. So... we must be pretty far.
     game.log("voyaging");
     var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, friends.concat({x:target[0],y:target[1]})); // don't step on the target 
-    if (nx !== null && nx !== game.me.x || ny !== game.me.y) {
+    if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
+        game.log("Moving to " + nx + " " + ny + " im at " + game.me.x + " " + game.me.y);
         return [game.move(nx - game.me.x, ny - game.me.y), null];
     }
+
+    return [null, null];
 }
 
 export function turtle(game, steps, matrix, enemies, predators, prey, blindspot, friends) {

@@ -31,13 +31,16 @@ export function listen_orders(game) {
     return orders;
 }
 
+var last_attacker_seen = -(1<<30);
+
 export function mining(game, steps, matrix, target, target_trail, home, home_trail, enemies, friends) {
 
     // Observation
     var has_neighboring_attacker = false;
     enemies.forEach(r => {
-        if (warrior.is_warrior(r.unit)) has_neighboring_attacker = true;
+        if (warrior.is_warrior(r.unit)) last_attacker_seen = steps;
     });
+    if (last_attacker_seen + 5 >= steps) has_neighboring_attacker = true; // use a cooldown of 5 so pilgrims don't go back and forth forgetting that there's an enemy.
 
     var action;
 
@@ -105,10 +108,22 @@ export function expedition(game, steps, matrix, target, trail, enemies, friends)
         // either next to already, not enough and not on a resource, or far away.
         // anyhow, get close! Preferably on to a karbonite / fuel.
         var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
-            if (utils.robots_collide(friends, [x, y])) return null;
+            if (x !== game.me.x || y !== game.me.y) // allow standstill
+                if (utils.robots_collide(friends, [x, y])) return null;
             if (utils.robots_collide(enemies, [x, y])) return null;
             if (!trail[y][x]) return null;
             if (x === target[0] && y === target[1]) return null; // don't stand on church square
+
+            // Do not walk into enemy fire. We are actually good as scouts.
+            var danger = 0;
+            enemies.forEach(e => {
+                if (warrior.is_warrior(e.unit)) {
+                    if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [x, y]))) danger++;
+                }
+            });
+
+            if (danger) return -danger*1000000;
+
             if (utils.adjacent([x, y],target)) {
                 if (game.karbonite_map[y][x]) return 100;
                 if (game.fuel_map[y][x]) return 50;

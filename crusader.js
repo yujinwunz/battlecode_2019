@@ -1,7 +1,7 @@
 import {BCAbstractRobot, SPECS} from 'battlecode';
 import * as _turtle from 'turtle.js';
 
-function reflex(game, steps, matrix, enemies, predators, prey, blindspot, friends) {
+function reflex(game, steps, matrix, enemies, predators, prey, friends) {
     // Shoot first
     if (prey.length) {
         var target = utils.argmax(prey, r => utils.threat_level(game, r));
@@ -20,7 +20,7 @@ export function turtle(game, steps, matrix, enemies, predators, prey, friends) {
     // Priority 1: reflex - attack anything in range, then back away from blindspot
     var action = null, msg = null;
 
-    var [action, msg] = reflex(game, steps, matrix, enemies, predators, prey,vblindspot, friends);
+    var [action, msg] = reflex(game, steps, matrix, enemies, predators, prey, friends);
 
     // Priority 2: Turtling
     if (!action && !msg) {
