@@ -20,7 +20,7 @@ const TYPEMAP = {
     pilgrim_assign_target: 0b000,
     pilgrim_build_church: 0b001,
 
-    requesting_backup: 0b010,
+    castle_distress: 0b010,
 
     attack: 0b011,
 
@@ -38,7 +38,7 @@ const SIGNEDMAP = {
     pilgrim_assign_target: false,
     pilgrim_build_church: false,
 
-    requesting_backup: true,
+    castle_distress: false,
 
     attack: false, // only sent by units who have "request_backup" beforehand.
 
@@ -82,8 +82,9 @@ export class Message {
         } else if (this.type === "attack") {
             this.x = arguments[1];
             this.y = arguments[2];
-        } else if (this.type === "requesting_backup") {
-            this.filter = arguments[1];
+        } else if (this.type === "castle_distress") {
+            this.x = arguments[1];
+            this.y = arguments[2];
         } else if (this.type === "start_expedition" || this.type === "start_assult") {
             this.x = arguments[1];
             this.y = arguments[2];
@@ -110,8 +111,9 @@ export class Message {
         if (this.type === "pilgrim_assign_target" || this.type === "pilgrim_build_church") {
             msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
-        } else if (this.type === "requesting_backup") {
-            msg |= (this.filter << (16 - TYPE_BITS - UNIT_FILTER_BITS));
+        } else if (this.type === "castle_distress") {
+            msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
+            msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
         } else if (this.type === "attack") {
             msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS)); 
@@ -151,9 +153,11 @@ export function decode(rawmsg, frombot, team) {
         var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         msg = new Message("pilgrim_build_church", x, y);
         signed = false;
-    } else if (type === TYPEMAP.requesting_backup) {
-        var [filter, rawmsg] = eat_msg(rawmsg, UNIT_FILTER_BITS);
-        msg = new Message("requesting_backup", filter);
+    } else if (type === TYPEMAP.castle_distress) {
+        var [x, rawmsg] = eat_msg(rawmsg, COORD_BITS);
+        var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS); 
+        msg = new Message("castle_distress", x, y);
+        signed = false;
     } else if (type === TYPEMAP.attack) {
         var [x, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS); 

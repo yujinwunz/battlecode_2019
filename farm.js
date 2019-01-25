@@ -58,7 +58,7 @@ function headcount(game, friends) {
 
 var first_build = true;
 
-export function turn(game, enemies, friends) {
+export function turn(game, steps, enemies, friends) {
     if (assignments === null) initialize(game);
 
     // Observation
@@ -88,7 +88,9 @@ export function turn(game, enemies, friends) {
                 game.log("nullified");
                 first_build = false;
             } else {
-                action = game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y);
+                if (!utils.in_distress(game, steps)) {
+                    action = game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y);
+                }
             }
             msg = [new Message("pilgrim_assign_target", target[0], target[1]), 2];
             last_target = [target[0], target[1]];

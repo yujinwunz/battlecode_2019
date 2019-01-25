@@ -37,6 +37,8 @@ export function listen_orders(game) {
         if (msg.type === "order66") {
             game.log("EXECUTE ORDER 66; YES SIR");
             orders.push(msg);
+        } else if (msg.type === "castle_distress") {
+            if (r.id % 10 === r.signal_radius % 10) orders.push(msg);
         }
     });
     return orders;
@@ -142,7 +144,9 @@ function defense(game, steps, enemies, friends) {
         });
 
         if (turtle[0] !== null) {
-            return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+            if (!utils.in_distress(game, steps)) { // castle protection before church protection
+                return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+            }
         }
     }
     return [null, msg];
@@ -180,6 +184,6 @@ export function turn(game, steps, enemies, friends, orders) {
     }
     
     // Priority 3: Autopilot resource management
-    if (!action && !msg) var [action, msg] = farm.turn(game, steps, friends);
+    if (!action && !msg) var [action, msg] = farm.turn(game, steps, enemies, friends);
     return [action, msg];
 }

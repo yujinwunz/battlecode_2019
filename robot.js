@@ -174,9 +174,10 @@ class MyRobot extends BCAbstractRobot {
                     target = [_home.x, _home.y];
                 } else {
                     vipid = 0;
-                    target = [game.me.x, game.me.y];
+                    target = [this.me.x, this.me.y];
                 }
                 //target_trail = nav.build_map(this.map, target, SPECS.UNITS[this.me.unit].SPEED, nav.GAITS.WALK); // Slow gait for less fuel and more grouping. Rushes don't need to be... well... rushed.
+                this.last_castle_distress = -(1<<30);
             }
             this.fuel_target = 100;
             this.karbonite_target = 100;
@@ -219,6 +220,9 @@ class MyRobot extends BCAbstractRobot {
             var [action, msg] = castle.turn(this, steps, enemies, predators, prey, friends);
         } else if (this.me.unit === SPECS.CHURCH) {
             var orders = church.listen_orders(this);
+            orders.forEach(o => {
+                if (o.type === "castle_distress") this.last_castle_distress = steps;
+            });
             var [action, msg] =  church.turn(this, steps, enemies, friends, orders);
         } else if (this.me.unit === SPECS.PILGRIM) {
             var orders = pilgrim.listen_orders(this);
@@ -238,6 +242,7 @@ class MyRobot extends BCAbstractRobot {
                     home_trail = nav.build_map(this.map, home, 4, nav.GAITS.SPRINT, []);
                     pilgrim_state = pilgrim.EXPEDITION;
                 }
+                if (o.type === "castle_distress") this.last_castle_distress = steps;
             });
 
             if (pilgrim_state === pilgrim.ORPHAN) {
@@ -250,11 +255,12 @@ class MyRobot extends BCAbstractRobot {
         } else if (this.me.unit === SPECS.CRUSADER) {
             var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
-                if (o.type === "attack") {
+                if (o.type === "attack" || o.type === "castle_distress") {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
                     crusader_state = warrior.ATTACKING;
                 }
+                if (o.type === "castle_distress") this.last_castle_distress = steps;
             });
 
             if (crusader_state === warrior.ATTACKING) {
@@ -272,10 +278,15 @@ class MyRobot extends BCAbstractRobot {
         } else if (this.me.unit === SPECS.PROPHET) {
             var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
-                if (o.type === "attack") {
+                if (o.type === "attack" || o.type === "castle_distress") {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     prophet_state = warrior.ATTACKING;
+                }
+                if (o.type === "castle_distress") {
+                    this.log("castle_distress received");
+                    this.log(o);
+                    this.last_castle_distress = steps;
                 }
             });
 
@@ -294,15 +305,10 @@ class MyRobot extends BCAbstractRobot {
         } else if (this.me.unit === SPECS.PREACHER) {
             var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
-                if (o.type === "attack") {
+                if (o.type === "attack" || o.type === "castle_distress") {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     preacher_state = warrior.ATTACKING;
-                } else if (o.type === "requesting_backup") {
-                    vipid = o.sender.id;
-                    target = [o.sender.x, o.sender.y];
-                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
-                    preacher_state = warrior.PROTECTING;
                 }
             });
 

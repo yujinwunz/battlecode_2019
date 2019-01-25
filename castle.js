@@ -257,7 +257,7 @@ function canonical_strategic_move(game, steps, known_stations) {
         }
     });
 
-    if (to_build) {
+    if (to_build && !utils.in_distress(game, steps)) {
         game.log("Considering building at " + to_build[0] + " " + to_build[1]);
         return [EXPAND, to_build]; 
     }
@@ -376,9 +376,28 @@ function init_implied_castles(game) {
 var max_escorts = 0;
 var target_escorts = 0;
 var last_call_on = -(1<<30);
+var last_distress_on = -(1<<30);
 
 const CRITICAL_MASS = 100;
 const BACKUP_DELAY = 5;
+const DISTRESS_DELAY = 15;
+
+function get_backup_message(game, steps, enemies, range=64) {
+    var closest = utils.argmax(enemies, f => {
+        if (!warrior.is_warrior(f.unit)) return null;
+        return -utils.dist([game.me.x, game.me.y], [f.x, f.y]);
+    });
+
+    if (closest) {
+        if (utils.dist([closest.x, closest.y], [game.me.x, game.me.y]) <= 64) {
+            last_call_on = steps;
+            game.log("requesting assistance");
+            // yes. Yes we do.
+            return [new Message("attack", closest.x, closest.y), range];
+        }
+    }
+    return null;
+}
 
 function defense(game, steps, enemies, predators, prey, friends) {
     var msg = null;
@@ -386,19 +405,7 @@ function defense(game, steps, enemies, predators, prey, friends) {
     // check if we need our bots to back us up
     // Do we need to call for backup?
     if (steps > last_call_on + BACKUP_DELAY) {
-        var closest = utils.argmax(enemies, f => {
-            if (!warrior.is_warrior(f.unit)) return null;
-            return -utils.dist([game.me.x, game.me.y], [f.x, f.y]);
-        });
-
-        if (closest) {
-            if (utils.dist([closest.x, closest.y], [game.me.x, game.me.y]) <= 64) {
-                last_call_on = steps;
-                game.log("requesting assistance");
-                // yes. Yes we do.
-                msg = [new Message("attack", closest.x, closest.y), 64];
-            }
-        }
+        msg = get_backup_message(game, steps, enemies);
     }
 
     // Calculate how much castles / churches should have.
@@ -453,15 +460,22 @@ function defense(game, steps, enemies, predators, prey, friends) {
     var enemy_threat = 0;
     var seen = {};
     enemies.forEach(r => {
-        seen[r.id] = 0;
+        seen[r.id] = true;
+        game.log("seen " + r.id);
         if (warrior.is_warrior(r.unit)) enemy_threat += 3;
         else enemy_threat += 1;
     });
     for (var eid in known_enemies) {
+        game.log("inferring enemy");
         if (eid in seen) continue;
         var e = known_enemies[eid];
+        game.log("not seen. it is ");
+        game.log(e);
         if (!warrior.is_warrior(e.unit)) continue;
-        if (utils.dist([e.x, e.y], [game.me.x, game.me.y]) < 300) enemy_threat += 1.5;
+        if (utils.dist([e.x, e.y], [game.me.x, game.me.y]) < 300) {
+            game.log("added to enemy threat");
+            enemy_threat += 1.5;
+        }
     }
 
     my_target_reo = Math.max(my_target_reo, enemy_threat);
@@ -480,9 +494,38 @@ function defense(game, steps, enemies, predators, prey, friends) {
     if (game.fuel > game.fuel_target && game.karbonite > game.karbonite_target) should_build = true;
 
     if (steps < 5) should_build = false;
+    
+    // Sometimes, in the early game we run out of karbonite and are outmatched. Call for dire assistance
+    if (my_reo < enemy_threat && game.karbonite < 150) {
+        if (last_distress_on + DISTRESS_DELAY < steps) {
+            game.log("Calling for dire assistance");
+            var closest = utils.argmax(enemies, f => {
+                if (!warrior.is_warrior(f.unit)) return null;
+                return -utils.dist([game.me.x, game.me.y], [f.x, f.y]);
+            });
+
+            if (closest) {
+                last_distress_on = steps;
+                game.log("requesting dire assistance");
+                var range = Math.max(200, Math.ceil(game.map.length*game.map.length));
+                range -= range%10;
+                range += game.me.id%10; // Password for this thing
+                msg = [new Message("castle_distress", Math.round((closest.x+game.me.x)/2), Math.round((closest.y+game.me.y)/2)), range];
+            }
+        }
+    }
 
     if (should_build) {
         game.log("decided to build.");
+        var savior = SPECS.PROPHET;
+        var preacher_rush = false;
+        
+        enemies.forEach(r => {
+            if (r.unit === SPECS.PREACHER) preacher_rush++;
+        });
+
+        if (preacher_rush) savior = SPECS.PROPHET;
+
         var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
             if (game.map[y][x] === false) return null;
             if (utils.robots_collide(friends, [x, y])) return null;
@@ -491,7 +534,11 @@ function defense(game, steps, enemies, predators, prey, friends) {
         });
 
         if (turtle[0] !== null) {
-            return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+            if (game.karbonite >= SPECS.UNITS[savior].CONSTRUCTION_KARBONITE &&
+                game.fuel >= SPECS.UNITS[savior].CONSTRUCTION_FUEL) {
+                if (!msg) msg = get_backup_message(game, steps, enemies, 2);
+                return [game.buildUnit(savior, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+            }
         }
     }
 
@@ -543,7 +590,7 @@ export function turn(game, steps, enemies, predators, prey, friends) {
 
     // Priority 3. Autopilot farming
     if (!action && !msg) {
-        var [action, msg] = farm.turn(game, enemies, friends);
+        var [action, msg] = farm.turn(game, steps, enemies, friends);
     }
 
     // Priority 4. Passive turtling.

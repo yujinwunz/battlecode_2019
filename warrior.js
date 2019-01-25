@@ -13,10 +13,10 @@ export function listen_orders(game, vipid) {
         if ("signal" in r) {
             if (r.signal != -1) {
                 var msg = decode(r.signal, r, game.me.team);
-                if (msg.type === "requesting_backup") {
-                    orders.push(msg);
-                } else if (msg.type === "attack") {
+                if (msg.type === "attack") {
                     if (msg.sender.id === vipid) orders.push(msg);
+                } else if (msg.type === "castle_distress") {
+                    if (r.signal_radius % 10 === r.id % 10) orders.push(msg);
                 }
             }
         }
@@ -30,6 +30,7 @@ export function is_warrior(unit) {
 
 export function done_attacking(game, steps, enemies, friends, target) {
     if (enemies.length) return false;
+    if (utils.in_distress(game, steps)) return false;
 
     // We should be in the thick of it and clear the area
     if (utils.dist([game.me.x, game.me.y], target) > SPECS.UNITS[game.me.unit].VISION_RADIUS *2/3) return false;

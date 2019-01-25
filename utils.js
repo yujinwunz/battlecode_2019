@@ -78,11 +78,13 @@ export function in_fire_range(type, dist) {
 }
 
 export function threat_level(game, r) {
-    var hp = r.health;
-    var hp_per_hit = SPECS.UNITS[r.unit].ATTACK_DAMAGE / r.health;
+    var hp = SPECS.UNITS[r.unit].STARTING_HP;
+    var hp_per_hit = SPECS.UNITS[r.unit].ATTACK_DAMAGE / hp;
     var in_range = (game.me.x-r.x)*(game.me.x-r.x) + (game.me.y-r.y)*(game.me.y-r.y) <= SPECS.UNITS[r.unit].ATTACK_RANGE;
 
-    return (in_range<<10) | (hp_per_hit<<5) | hp;
+    game.log(r);
+    game.log("threat " + ((hp_per_hit*1000000) + (r.turn)));
+    return /*(in_range<<10) +*/ ((hp_per_hit*100000) + (r.turn));
 }
 
 export function glance(game) {
@@ -299,4 +301,8 @@ export function on_our_side(game, loc) {
         if (game.me.team === 0) return loc[1] <= game.map.length/2;
         else return loc[1] > game.map.length/2;
     }
+}
+
+export function in_distress(game, steps) {
+    return game.last_castle_distress + 20 > steps;
 }

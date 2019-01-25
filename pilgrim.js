@@ -25,6 +25,8 @@ export function listen_orders(game) {
                 orders.push(msg);            
             } else if (msg.type === "pilgrim_build_church") {
                 orders.push(msg);
+            } else if (msg.type === "castle_distress") {
+                if (r.id%10 === r.signal_radius%10) orders.push(msg);
             }
         }
     });
@@ -100,7 +102,7 @@ export function expedition(game, steps, matrix, target, trail, enemies, friends)
 
     // Execution
     var action = null;
-    if (next_to_target && enough_to_build && can_build) {
+    if (next_to_target && enough_to_build && can_build && !utils.in_distress(game, steps)) {
         action = game.buildUnit(SPECS.CHURCH, target[0]-game.me.x, target[1]-game.me.y);
     } else if (next_to_target && on_resource) {
         action = game.mine();
