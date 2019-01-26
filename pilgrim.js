@@ -6,6 +6,8 @@ import * as warrior from 'warrior.js';
 import * as nav from 'nav.js';
 import * as utils from 'utils.js';
 
+import * as farm from 'farm.js';
+
 export const ORPHAN = 0;
 export const MINING = 1;
 export const EXPEDITION = 2;
@@ -20,10 +22,7 @@ export function listen_orders(game) {
         var msg = decode(r.signal, r, game.me.team);
 
         if (r.signal_radius < 10) {
-            if (msg.type === "pilgrim_assign_target") {
-                game.log("pushing message from " + r.id);
-                orders.push(msg);            
-            } else if (msg.type === "pilgrim_build_church") {
+            if (msg.type === "pilgrim_build_church") {
                 orders.push(msg);
             } else if (msg.type === "castle_distress") {
                 if (r.id%10 === r.signal_radius%10) orders.push(msg);
@@ -34,8 +33,18 @@ export function listen_orders(game) {
 }
 
 var last_attacker_seen = -(1<<30);
+var resource_group = null;
+var mining_target = null;
+var target_trail = null;
 
-export function mining(game, steps, matrix, predators, target, target_trail, home, home_trail, enemies, friends) {
+export function mining(game, steps, matrix, home, predators, enemies, friends) {
+    if (resource_group === null) {
+        game.log("initializing. Resource group:");
+        var seen = utils.null_array(game.map[0].length, game.map[1].length);
+        resource_group = [];
+        farm.dfs(game.map, game.karbonite_map, game.fuel_map, [game.me.x, game.me.y], seen, resource_group); 
+        game.log(resource_group);
+    }
 
     if (predators.length) {
         // if directly in the line of fire, gtfo.
@@ -68,7 +77,7 @@ export function mining(game, steps, matrix, predators, target, target_trail, hom
 
     var action;
 
-    var at_target = (game.me.x === target[0] && game.me.y === target[1]);
+    var at_target = mining_target && (game.me.x === mining_target[0] && game.me.y === mining_target[1]);
     var resources_full = (game.me.fuel >= SPECS.UNITS[SPECS.PILGRIM].FUEL_CAPACITY ||
                          game.me.karbonite >= SPECS.UNITS[SPECS.PILGRIM].KARBONITE_CAPACITY);
     var resources_third = (game.me.fuel*3 >= SPECS.UNITS[SPECS.PILGRIM].FUEL_CAPACITY ||
@@ -83,13 +92,28 @@ export function mining(game, steps, matrix, predators, target, target_trail, hom
         should_drop_off = true;
     }
 
+    var churches = friends.filter(f => f.unit === SPECS.CHURCH || f.unit === SPECS.CASTLE);
+    game.log("nearby churches:");
+    game.log(churches);
+    game.log(friends);
+    game.log("I am at " + game.me.x + " " + game.me.y);
     if (should_drop_off) {
         // go home and dump
         // actually, go to any neighbour church and dump
-        var churches = friends.filter(f => f.unit === SPECS.CHRUCH || f.unit === SPECS.CASTLE);
-        if (utils.adjacent(home, [game.me.x, game.me.y])) {
-            action = game.give(home[0]-game.me.x, home[1]-game.me.y, game.me.karbonite, game.me.fuel);
+        var loc = utils.argmax(churches, f=> {
+            if (utils.adjacent([f.x, f.y], [game.me.x, game.me.y])) return 1;
+            return null;
+        });
+        if (loc) {
+            action = game.give(loc.x-game.me.x, loc.y-game.me.y, game.me.karbonite, game.me.fuel);
         } else {
+            var closest = utils.argmax(churches, c => {
+                return -utils.dist([c.x, c.y], [game.me.x, game.me.y]);
+            });
+            game.log("voyaging home. closest is");
+            game.log(closest);
+            if (!closest) closest = home;
+            game.log(closest);
             var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
                 if (utils.robots_collide(friends, [x, y])) return null;
                 if (utils.robots_collide(enemies, [x, y])) return null;
@@ -99,7 +123,7 @@ export function mining(game, steps, matrix, predators, target, target_trail, hom
                     if (utils.adjacent(h, [x, y])) is_adj = true; 
                 });
                 if (is_adj) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
-                return -utils.dist([x, y], home) * 1000 - utils.dist([x, y], [game.me.x, game.me.y]);
+                return -utils.dist([x, y], [closest.x, closest.y]) * 1000 - utils.dist([x, y], [game.me.x, game.me.y]);
             });
             if (nx !== game.me.x || ny !== game.me.y) { 
                 if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
@@ -110,9 +134,45 @@ export function mining(game, steps, matrix, predators, target, target_trail, hom
         action = game.mine();
     } else {
         // go to work
-        var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], 4, game.getVisibleRobots());
-        if (nx !== game.me.x || ny !== game.me.y) {
-            if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+        if (mining_target === null || utils.robots_collide(friends.filter(f => f.unit === SPECS.PILGRIM), mining_target)) {
+            // Time for a new target
+            var target = utils.argmax(resource_group, f => {
+                if (utils.robots_collide(friends, f)) return null;
+                var dist = utils.dist(f, [game.me.x, game.me.y]);
+                if (game.karbonite_map[f[1]][f[0]]) return 1000-dist;
+                return -dist;
+            });
+
+            if (target === null) {
+                // Go into stalking mode.
+                // TODO
+                // First just get out of the way of any churches.
+                var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
+                    if (utils.robots_collide(friends, [x, y])) return null;
+                    if (utils.robots_collide(enemies, [x, y])) return null;
+                    if (game.map[y][x] === false) return null;
+                    var is_adj = false;
+                    churches.forEach(h => {
+                        if (utils.adjacent(h, [x, y])) is_adj = true; 
+                    });
+                    if (is_adj) return null;
+                    return -utils.dist([x, y], [game.me.x, game.me.y]);
+                });
+                if (nx !== game.me.x || ny !== game.me.y) { 
+                    if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+                }
+            } else {
+                // go to new target
+                target_trail = nav.build_map_cached(game.map, target, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.SPRINT, 5);
+                mining_target = [target[0], target[1]];
+            }
+        }
+    
+        if (!action) {
+            var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], 4, game.getVisibleRobots());
+            if (nx !== game.me.x || ny !== game.me.y) {
+                if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+            }
         }
     }
 
@@ -135,6 +195,12 @@ export function expedition(game, steps, matrix, target, trail, home, home_trail,
         if (f.unit === SPECS.CHURCH && f.x === target[0] && f.y === target[1]) return 1;
         return null;
     })
+
+    var newstate;
+    if (otherhome) {
+        game.log("someone else built it");
+        newstate = MINING;
+    }
 
     // Execution
     var action = null;
@@ -201,7 +267,7 @@ export function expedition(game, steps, matrix, target, trail, home, home_trail,
         if (nx !== game.me.x || ny !== game.me.y)
             action = game.move(nx-game.me.x, ny-game.me.y);
     }
-    return [action, null];
+    return [action, null, newstate];
 }
 
 export function orphan(game, steps) {

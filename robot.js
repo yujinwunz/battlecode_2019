@@ -151,7 +151,7 @@ var home_trail, target_trail;
 var vipid = -1;
 
 // Pilgrim state
-var pilgrim_state = pilgrim.ORPHAN;
+var pilgrim_state = pilgrim.MINING;
 
 // Crusader state
 var crusader_state = warrior.TURTLING;
@@ -227,17 +227,18 @@ class MyRobot extends BCAbstractRobot {
             });
             var [action, msg] =  church.turn(this, steps, enemies, friends, orders);
         } else if (this.me.unit === SPECS.PILGRIM) {
+            if (steps === 1) {
+                // find nearest castle/church
+                home = friends.filter(f => 
+                    (f.unit === SPECS.CASTLE || f.unit === SPECS.CHURCH) 
+                    && utils.adjacent([this.me.x, this.me.y], [f.x, f.y])
+                );
+                home = [home.x, home.y];
+            }
             var orders = pilgrim.listen_orders(this);
             orders.forEach(o => {
-                if (o.type === "pilgrim_assign_target") {
-                    if (pilgrim_state === pilgrim.MINING && target && target[0] !== null) return;
-                    target = [o.x, o.y];
-                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, [], 5);
-                    home = [o.sender.x, o.sender.y];
-                    home_trail = nav.build_map(this.map, home, 4, nav.GAITS.SPRINT, [], 5);
-                    pilgrim_state = pilgrim.MINING;
-                } else if (o.type === "pilgrim_build_church") {
-                    if (pilgrim_state === pilgrim.MINING) return;
+                if (o.type === "pilgrim_build_church") {
+                    if (steps !== 1) return;
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, []);
                     this.log("sending pilgrim to build church. home is now " + o.sender.x + " " + o.sender.y);
@@ -248,12 +249,14 @@ class MyRobot extends BCAbstractRobot {
                 if (o.type === "castle_distress") this.last_castle_distress = steps;
             });
 
-            if (pilgrim_state === pilgrim.ORPHAN) {
-                var [action, msg] = pilgrim.orphan(this, steps);
-            } else if (pilgrim_state === pilgrim.MINING) {
-                var [action, msg] = pilgrim.mining(this, steps, matrix, predators, target, target_trail, home, home_trail, enemies, friends);
+            if (pilgrim_state === pilgrim.MINING) {
+                var [action, msg] = pilgrim.mining(this, steps, matrix, home, predators, enemies, friends);
             } else if (pilgrim_state === pilgrim.EXPEDITION) {
-                var [action, msg] = pilgrim.expedition(this, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
+                var [action, msg, newstate] = pilgrim.expedition(this, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
+                if (newstate !== undefined) {
+                    this.log("swithching to new state " + newstate);
+                    pilgrim_state = newstate;
+                }
             }
         } else if (this.me.unit === SPECS.CRUSADER) {
             var orders = warrior.listen_orders(this, vipid);

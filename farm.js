@@ -5,15 +5,140 @@ import * as nav from 'nav.js';
 
 export const RESOURCE_MAX_R = 36;
 
-var assigned_to = {};
-var assignments = null;
 
 var last_target = null;
+var resource_group = null;
+var group_bounds = [(1<<30), -(1<<30), (1<<30), -(1<<30)];
 
-function get_a_karbonite_target(game) {
+export function dfs(map, k_map, f_map, loc, seen, res, cols=null, rows=null) {
+    if (cols === null) cols = map[0].length;
+    if (rows === null) rows = map.length;
+    var [x, y] = loc;
+    seen[y][x] = true;
+    if (k_map[y][x] || f_map[y][x]) res.push([x, y]);
+    for (var nx = Math.max(0, x-4); nx <= Math.min(cols-1, x+4); nx++) {
+        for (var ny = Math.max(0, y-4); ny <= Math.min(rows-1, y+4); ny++) {
+            if (seen[ny][nx]) continue;
+            if ((nx-x)*(nx-x) + (ny-y)*(ny-y) > 16) continue;
+            if (k_map[ny][nx] || f_map[ny][nx]) {
+                dfs(map, k_map, f_map, [nx, ny], seen, res, cols, rows);
+            }
+        }
+    }
+}
+
+export function get_best_church_location(map, group) {
+    var cols = map[0].length;
+    var rows = map.length;
+
+    var minx = (1<<30), maxx = 0, miny = (1<<30), maxy = 0;
+    for (var i = 0; i < group.length; i++) {
+        var [x, y] = group[i];
+        minx = Math.min(minx, x);
+        maxx = Math.max(maxx, x);
+        miny = Math.min(miny, y);
+        maxy = Math.max(maxy, y);
+    }
+
+    var bestcost = (1<<30);
+    var bestloc = [null, null];
+    for (var x = Math.max(0, minx-2); x <= Math.min(cols-1, maxx+2); x++) {
+        for (var y = Math.max(0, miny-2); y <= Math.min(rows-1, maxy+2); y++) {
+            if (!map[y][x]) continue;
+
+            var cost = 0;
+            for (var i = 0; i < group.length; i++) {
+                var [gx, gy] = group[i];
+                var dist = (x-gx)*(x-gx) + (y-gy)*(y-gy);
+                if (dist === 0) cost += 1000000; // not allowed to build church on resource itself
+                else if (dist < 3) cost += 0;
+                else if (dist <= 4) cost += 11;
+                else if (dist <= 9) cost += 14;
+                else if (dist <= 25) cost += 28;
+                else cost += 200;
+            }
+            if (cost < bestcost) {
+                bestcost = cost;
+                bestloc = [x, y];
+            }
+        }
+    }
+
+    return bestloc;
+}
+
+export function get_church_locations(map, karbonite_map, fuel_map) {
+    var symmetry = utils.symmetry(map);
+
+    var cols = map[0].length;
+    var rows = map.length;
+    var ocols = cols, orows = rows;
+
+    if (symmetry === utils.VERTICAL) {
+        cols = Math.ceil(cols/2);
+    } else rows = Math.ceil(rows/2);
+
+    var groups = [];
+    var seen = utils.null_array(cols, rows);
+
+    // Use connected graphs to get the good castle locations.
+    for (var x = 0; x < cols; x++) {
+        for (var y = 0; y < rows; y++) {
+            if (seen[y][x]) continue;
+            if (karbonite_map[y][x] || fuel_map[y][x]) {
+                var res = []
+                dfs(map, karbonite_map, fuel_map, [x, y], seen, res, cols, rows);
+                groups.push(res);
+            }
+        }
+    }
+
+    // Duplicate the flip. We only flipped to avoid weird cases with
+    // super large clumps in the middle.
+    for (var i = groups.length - 1; i >= 0; i--) {
+        var g = groups[i];
+        var ng = [];
+        var minc = (1<<30);
+        var maxc = 0;
+        for (var j = 0; j < g.length; j++) {
+            var [x, y] = g[j];
+            if (symmetry === utils.VERTICAL) {
+                ng.push([ocols-1-x, y]);
+                minc = Math.min(minc, Math.min(x, ocols-1-x));
+                maxc = Math.max(maxc, Math.max(x, ocols-1-x));
+            } else {
+                ng.push([x, orows-1-y]);
+                minc = Math.min(minc, Math.min(y, orows-1-y));
+                maxc = Math.max(maxc, Math.max(y, orows-1-y));
+            }
+        }
+
+        // Use a single church for a resource group so close to the center
+        // that it reflected into a clump
+        if (maxc - minc <= 8) {
+            ng.forEach(a => g.push(a));
+        } else {
+            groups.push(ng);
+        }
+    }
+
+    var churches = [];
+
+    // for each group, find best church location. 
+    for (var i = 0; i < groups.length; i++) {
+        var g = groups[i];
+        // don't go if it's next to an existing castle
+
+        churches.push(get_best_church_location(map, g));
+    }
+
+    return [churches, groups];
+}
+
+function get_a_karbonite_target(game, friends) {
     return utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], RESOURCE_MAX_R, (x, y) => {
         if (game.karbonite_map[y][x]) {
-            if (!assignments[y][x]) {
+            if (!utils.robots_collide(friends, [x, y])) {
                 return 1;
             }
         }
@@ -21,96 +146,85 @@ function get_a_karbonite_target(game) {
     });
 }
 
-function get_a_fuel_target(game) {
+function get_a_fuel_target(game, friends) {
     return utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], RESOURCE_MAX_R, (x, y) => {
         if (game.fuel_map[y][x]) {
-            if (!assignments[y][x]) {
-                return 1;
-            }
+            if (!utils.robots_collide(friends, [x, y])) return 1;
         }
         return null;
     });
 }
 
-function get_a_target(game) {
-    var ret = get_a_karbonite_target(game);
-    if (ret[0] === null) ret = get_a_fuel_target(game);
+function get_a_target(game, friends) {
+    var ret = get_a_karbonite_target(game, friends);
+    if (ret[0] === null) ret = get_a_fuel_target(game, friends);
     return ret;
 }
 
 function initialize(game) {
-    assignments = utils.null_array(game.map[0].length, game.map.length); 
-}
+    var seen = utils.null_array(game.map[0].length, game.map.length);
+    resource_group = [];
+    dfs(game.map, game.karbonite_map, game.fuel_map, [game.me.x, game.me.y], seen, resource_group);
 
-function headcount(game, friends) {
-    if (last_target) {
-        // the pilgrim we just build should be here by now
-        var done = false;
-        friends.forEach(r => {
-            if (utils.dist([r.x, r.y], [game.me.x, game.me.y]) < 9 && r.unit === SPECS.PILGRIM) {
-                if (!done) {
-                    assigned_to[r.id] = [last_target[0], last_target[1]];
-                    assignments[last_target[1]][last_target[0]] = r.id;
-                    last_target = null;
-                    done = true;
-                }
-            }
-        });
-    }
+    resource_group.forEach(r => {
+        group_bounds[0] = Math.min(group_bounds[0], r[0]);
+        group_bounds[1] = Math.max(group_bounds[1], r[0]);
+        group_bounds[2] = Math.min(group_bounds[2], r[1]);
+        group_bounds[3] = Math.max(group_bounds[3], r[1]);
+    });
 
-    var seen = {};
-    friends.forEach(r => {
-        seen[r.id] = true;
-    });
-    var to_remove = [];
-    for (var id in assigned_to) {
-        if (!seen[id]) to_remove.push(id);
-    }
-    to_remove.forEach(id => {
-        var [x, y] = assigned_to[id];
-        assignments[y][x] = null;
-        delete assigned_to[id];
-    });
+    group_bounds[0] --;
+    group_bounds[1] ++;
+    group_bounds[2] --;
+    group_bounds[3] ++;
 }
 
 var first_build = true;
 
 export function turn(game, steps, enemies, friends) {
-    if (assignments === null) initialize(game);
+    if (resource_group === null) initialize(game);
 
     // Observation
-    headcount(game, friends);
-
-    var target = get_a_target(game);
+    var target = get_a_target(game, friends);
     var resources_enough = (game.fuel >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_FUEL &&
                             game.karbonite >= SPECS.UNITS[SPECS.PILGRIM].CONSTRUCTION_KARBONITE);
 
-    // Execution
-    var action = null, msg = null;
-    if (target[0] !== null && resources_enough && last_target === null) {
-        var trail = nav.build_map(game.map, target, 2, nav.GAITS.SPRINT, [], 4);
+    // Should we build or nah
+    var num_pilgrims = friends.filter(f => {
+        return f.unit === SPECS.PILGRIM && f.x >= group_bounds[0] && f.x <= group_bounds[1] && f.y >= group_bounds[2] && f.y <= group_bounds[3];
+    }).length;
+   
 
-        var [sx, sy] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
-            if (utils.robots_collide(friends, [x, y])) return null;
-            if (utils.robots_collide(enemies, [x, y])) return null;
-            if (!trail[y][x]) return null;
-            return (-trail[y][x][0]*1000 -trail[y][x][1]);
-        });
+    if (num_pilgrims < resource_group.length) {
+        game.log("building because we have " + num_pilgrims + " pilgrims but have " + resource_group.length + " resources");
+        game.log(friends);
+        if (target[0] === null) throw "impossible";
 
-        if (sx === null) {
-            game.log("Caked in, can't build");
-        } else {
-            game.log("gonna build");
-            if (first_build && game.me.unit === SPECS.CHURCH) {
-                game.log("nullified");
-                first_build = false;
+        // Execution
+        var action = null, msg = null;
+        if (target[0] !== null && resources_enough && last_target === null) {
+            var trail = nav.build_map(game.map, target, 2, nav.GAITS.SPRINT, [], 4);
+
+            var [sx, sy] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+                if (utils.robots_collide(friends, [x, y])) return null;
+                if (utils.robots_collide(enemies, [x, y])) return null;
+                if (!trail[y][x]) return null;
+                return (-trail[y][x][0]*1000 -trail[y][x][1]);
+            });
+
+            if (sx === null) {
+                game.log("Caked in, can't build");
             } else {
-                if (!utils.in_distress(game, steps)) {
-                    action = game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y);
+                game.log("gonna build");
+                if (first_build && game.me.unit === SPECS.CHURCH) {
+                    game.log("nullified");
+                    first_build = false;
+                } else {
+                    if (!utils.in_distress(game, steps)) {
+                        action = game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y);
+                    }
                 }
             }
-            msg = [new Message("pilgrim_assign_target", target[0], target[1]), 2];
-            last_target = [target[0], target[1]];
         }
     }
 

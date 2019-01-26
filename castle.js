@@ -378,7 +378,7 @@ function i_should_do(game, steps, smove, known_stations) {
 }
 
 function init(game) {
-    var [_c, _g] = castleutils.get_church_locations(game.map, game.karbonite_map, game.fuel_map);
+    var [_c, _g] = farm.get_church_locations(game.map, game.karbonite_map, game.fuel_map);
     church_locs = _c;
     group_locs = _g;
     symmetry = utils.symmetry(game.map);

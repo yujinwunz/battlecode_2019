@@ -17,7 +17,6 @@ export const UNIT_FILTER_BITS = 6;
 export const SEED_BITS = 9;
 
 const TYPEMAP = {
-    pilgrim_assign_target: 0b000,
     pilgrim_build_church: 0b001,
 
     castle_distress: 0b010,
@@ -35,7 +34,6 @@ const TYPEMAP = {
 // signed messages ensure that during the chaos of battle,
 // only our team will send each other messages.
 const SIGNEDMAP = {
-    pilgrim_assign_target: false,
     pilgrim_build_church: false,
 
     castle_distress: false,
@@ -76,7 +74,7 @@ function eat_msg(msg, bits) {
 export class Message {
     constructor(type) {
         this.type = type;
-        if (this.type === "pilgrim_assign_target" || this.type == "pilgrim_build_church") {
+        if (this.type == "pilgrim_build_church") {
             this.x = arguments[1];
             this.y = arguments[2];
         } else if (this.type === "attack") {
@@ -108,7 +106,7 @@ export class Message {
         var typecode = TYPEMAP[this.type];
         msg |= (typecode << (16 - TYPE_BITS));
 
-        if (this.type === "pilgrim_assign_target" || this.type === "pilgrim_build_church") {
+        if (this.type === "pilgrim_build_church") {
             msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
         } else if (this.type === "castle_distress") {
@@ -143,12 +141,7 @@ export function decode(rawmsg, frombot, team) {
     var msg;
     var signed;
 
-    if (type === TYPEMAP.pilgrim_assign_target) {
-        var [x, rawmsg] = eat_msg(rawmsg, COORD_BITS);
-        var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS);
-        msg = new Message("pilgrim_assign_target", x, y);
-        signed = false;
-    } else if (type === TYPEMAP.pilgrim_build_church) {
+    if (type === TYPEMAP.pilgrim_build_church) {
         var [x, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         msg = new Message("pilgrim_build_church", x, y);
