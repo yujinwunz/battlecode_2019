@@ -47,7 +47,19 @@ function heartbeat(game) {
     return true;
 }
 
+var reports_in_a_row = 0;
+
 function report_enemies(game, steps) {
+    reports_in_a_row++;
+    if (reports_in_a_row == 4) {
+        reports_in_a_row = -1;
+        game.log("taking a break");
+        return false;
+    }
+    if (reports_in_a_row == 0) {
+        game.log("taking another break");
+        return false;
+    }
     // find an enemy that was reported last.
     var to_report = utils.argmax(game.getVisibleRobots(), r => {
         if (r.team === 1-game.me.team && "x" in r) {
@@ -70,10 +82,10 @@ function report_enemies(game, steps) {
         
         var dx = to_report.x - game.me.x;
         var dy = to_report.y - game.me.y;
-        dx = Math.max(-7, Math.min(8, dx)) + 7;
-        dy = Math.max(-7, Math.min(8, dy)) + 7;
-        dx = Math.floor(dx/2);
-        dy = Math.floor(dy/2);
+        dx = Math.max(-11, Math.min(12, dx)) + 11;
+        dy = Math.max(-11, Math.min(12, dy)) + 11;
+        dx = Math.floor(dx/3);
+        dy = Math.floor(dy/3);
 
         if (warrior.is_warrior(to_report.unit)) {
             game.log("reporting warrior at " + to_report.x + " " + to_report.y);
@@ -84,6 +96,7 @@ function report_enemies(game, steps) {
         }
         return true;
     }
+    reports_in_a_row = 0;
     return false;
 }
 
@@ -235,14 +248,14 @@ class MyRobot extends BCAbstractRobot {
             if (pilgrim_state === pilgrim.ORPHAN) {
                 var [action, msg] = pilgrim.orphan(this, steps);
             } else if (pilgrim_state === pilgrim.MINING) {
-                var [action, msg] = pilgrim.mining(this, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
+                var [action, msg] = pilgrim.mining(this, steps, matrix, predators, target, target_trail, home, home_trail, enemies, friends);
             } else if (pilgrim_state === pilgrim.EXPEDITION) {
                 var [action, msg] = pilgrim.expedition(this, steps, matrix, target, target_trail, home, home_trail, enemies, friends);
             }
         } else if (this.me.unit === SPECS.CRUSADER) {
             var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
-                if (o.type === "attack" || o.type === "castle_distress") {
+                if (o.type === "attack" || (o.type === "castle_distress" && utils.dist([o.x, o.y], [this.me.x, this.me.y]) < DISTRESS_RADIUS)) {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
                     crusader_state = warrior.ATTACKING;
@@ -265,7 +278,7 @@ class MyRobot extends BCAbstractRobot {
         } else if (this.me.unit === SPECS.PROPHET) {
             var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
-                if (o.type === "attack" || o.type === "castle_distress") {
+                if (o.type === "attack" || (o.type === "castle_distress" && utils.dist([o.x, o.y], [this.me.x, this.me.y]) < DISTRESS_RADIUS)) {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT);
                     prophet_state = warrior.ATTACKING;
@@ -292,7 +305,7 @@ class MyRobot extends BCAbstractRobot {
         } else if (this.me.unit === SPECS.PREACHER) {
             var orders = warrior.listen_orders(this, vipid);
             orders.forEach(o => {
-                if (o.type === "attack" || o.type === "castle_distress") {
+                if (o.type === "attack" || (o.type === "castle_distress" && utils.dist([o.x, o.y], [this.me.x, this.me.y]) < DISTRESS_RADIUS)) {
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 9, nav.GAITS.SPRINT);
                     preacher_state = warrior.ATTACKING;

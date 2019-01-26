@@ -35,7 +35,29 @@ export function listen_orders(game) {
 
 var last_attacker_seen = -(1<<30);
 
-export function mining(game, steps, matrix, target, target_trail, home, home_trail, enemies, friends) {
+export function mining(game, steps, matrix, predators, target, target_trail, home, home_trail, enemies, friends) {
+
+    if (predators.length) {
+        // if directly in the line of fire, gtfo.
+        var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
+            if (game.map[y][x] === false) return null;
+            if (utils.robots_collide(friends.concat(enemies), [x, y])) return null;
+
+            var danger = 0;
+            enemies.forEach(e => {
+                if (warrior.is_warrior(e.unit)) {
+                    if (utils.in_fire_range_full(e.unit, utils.dist([e.x, e.y], [x, y]))) danger++;
+                }
+            });
+
+            return -danger;
+        });
+
+        if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
+            game.log("running away");
+            return [game.move(nx-game.me.x, ny-game.me.y), null];
+        }
+    }
 
     // Observation
     var has_neighboring_attacker = false;

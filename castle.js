@@ -50,8 +50,6 @@ export function on_birth(game, r, unit) {
 }
 
 export function on_ping(game, r, loc) {
-    game.log("ping from");
-    game.log(r);
     if (!(r.id in known_friends)) {
         known_friends[r.id] = {id:r.id};
         if ("unit" in r) known_friends[r.id].unit = r.unit;
@@ -123,8 +121,8 @@ export function on_warrior_sighting(game, steps, r, dx, dy) {
     if (!(r.id in known_friends)) return;
     var r = known_friends[r.id];
     if ("x" in r && "y" in r) {
-        game.log("warrior sighted " + (r.x+dx*2-7) + " " + (r.y+dy*2-7));
-        enemy_warrior_sightings.push([steps, r.x + dx*2-7, r.y + dy*2-7]);
+        game.log("warrior sighted " + (r.x+dx*3-11) + " " + (r.y+dy*3-11));
+        enemy_warrior_sightings.push([steps, r.x + dx*3-11, r.y + dy*3-11]);
     }
 }
 
@@ -132,7 +130,7 @@ export function on_civilian_sighting(game, steps, r, dx, dy) {
     if (!(r.id in known_friends)) return;
     var r = known_friends[r.id];
     if ("x" in r && "y" in r) {
-        enemy_civilian_sightings.push([steps, r.x + dx*2-7, r.y + dy*2-7]);
+        enemy_civilian_sightings.push([steps, r.x + dx*3-11, r.y + dy*3-11]);
     }
 }
 
@@ -262,11 +260,16 @@ function canonical_strategic_move(game, steps, known_stations) {
 
         var mindis = (1<<30);
         known_stations.forEach(m => {
+            game.log(m);
+            game.log(loc);
             mindis = Math.min(mindis, utils.dist([m.x, m.y], loc))
         });
+        game.log("location " + loc[0] + " " + loc[1] + " mindist " + mindis);
         if (utils.on_our_side(game, loc)) {
+            game.log("was our side");
             return -mindis;
         } else {
+            game.log("was not our side");
             return -mindis - 1000;
         }
     });
@@ -275,6 +278,8 @@ function canonical_strategic_move(game, steps, known_stations) {
         resources_replenished = false;
         last_num_stations = known_stations.length;
         game.log(steps + " Considering building at " + to_build[0] + " " + to_build[1]);
+        game.log("my choices were:");
+        game.log(to_build_list);
         return [EXPAND, to_build]; 
     }
 
@@ -417,14 +422,31 @@ function get_backup_message(game, steps, enemies, range=64) {
 
 function defense(game, steps, enemies, predators, prey, friends) {
     var precaution_build = false;
-    if (steps === 1) {
+    if (steps === 4) {
         // analyse the meta. Things close to the front should have a backup archer now.
-        var dist;
+        var mydist;
         if (game.symmetry === utils.VERTICAL) {
-            dist = Math.abs(game.map[0].length/2 - game.me.x);
-        } else dist = Math.abs(game.map.length/2 - game.me.y);
+            mydist = Math.abs(game.map[0].length/2 - game.me.x);
+        } else mydist = Math.abs(game.map.length/2 - game.me.y);
 
-        if (dist <= 18) {
+        var closest_castle = true;
+        game.log("checking if closest...");
+        var my_castles = filter_known_friends((i, u, x, y) => u === SPECS.CASTLE);
+        game.log(my_castles);
+        my_castles.forEach(c => {
+            if (c.id === game.me.id) return;
+            var dist;
+            if (game.symmetry === utils.VERTICAL) {
+                dist = Math.abs(game.map[0].length/2 - c.x);
+            } else dist = Math.abs(game.map.length/2 - c.y);
+            game.log(dist);
+            if (dist < mydist) {
+                closest_castle = false;
+            }
+        });
+        game.log(mydist);
+
+        if (closest_castle && mydist < 14) {
             game.log("precaution build");
             precaution_build = true; 
         }
@@ -451,8 +473,8 @@ function defense(game, steps, enemies, predators, prey, friends) {
 
     var total_castle_reo = 0;
     var my_reo = 0;
-    var my_castles = filter_known_friends((i, u, x, y) => u === SPECS.CASTLE);
 
+    var my_castles = filter_known_friends((i, u, x, y) => u === SPECS.CASTLE);
     for (var id in known_friends) {
         var f = known_friends[id];
         if (warrior.is_warrior(f.unit)) {
@@ -496,15 +518,17 @@ function defense(game, steps, enemies, predators, prey, friends) {
         else enemy_threat += 1;
     });
 
+    var phantom_threat = 0;
     enemy_warrior_sightings.forEach(e => { // Helps to not react too late
         var [_, x, y] = e; 
-        game.log("inferring enemy");
         game.log(e);
         if (utils.dist([x, y], [game.me.x, game.me.y]) < 250) {
-            game.log("added to enemy threat");
-            enemy_threat += 1;
+            phantom_threat += 0.2;
         }
     });
+
+    phantom_threat = Math.min(phantom_threat, 10);
+    enemy_threat += phantom_threat;
 
     my_target_reo = Math.max(my_target_reo, enemy_threat);
 
@@ -525,9 +549,9 @@ function defense(game, steps, enemies, predators, prey, friends) {
     if (precaution_build) should_build = true;
     
     // Sometimes, in the early game we run out of karbonite and are outmatched. Call for dire assistance
-    if (my_reo < enemy_threat && game.karbonite < 150) {
+    if (my_reo*2 < enemy_threat && game.karbonite < 70) {
         if (last_distress_on + DISTRESS_DELAY < steps) {
-            game.log("Calling for dire assistance");
+            game.log(steps + " Calling for dire assistance");
             var closest = utils.argmax(enemies, f => {
                 if (!warrior.is_warrior(f.unit)) return null;
                 return -utils.dist([game.me.x, game.me.y], [f.x, f.y]);
@@ -542,11 +566,11 @@ function defense(game, steps, enemies, predators, prey, friends) {
             if (closest) {
                 last_distress_on = steps;
                 game.log("requesting dire assistance");
-                var range = Math.max(200, Math.ceil(game.map.length*game.map.length));
+                var range = game.map[0].length*game.map[0].length;
                 range -= range%10;
                 range += game.me.id%10; // Password for this thing
                 game.last_castle_distress = steps;
-                msg = [new Message("castle_distress", Math.round((closest[0]+game.me.x)/2), Math.round((closest[0]+game.me.y)/2)), range];
+                msg = [new Message("castle_distress", Math.floor((closest[0]+game.me.x)/2), Math.floor((closest[1]+game.me.y)/2)), range];
             }
         }
     }
@@ -591,6 +615,8 @@ function defense(game, steps, enemies, predators, prey, friends) {
 var order_66 = false;
 
 export function turn(game, steps, enemies, predators, prey, friends) {
+    game.log("it is now turn " + steps);
+    if (implied_enemy_castles === null) init_implied_castles(game);
     if (game.me.turn === 1) {
         known_friends[game.me.id] = {id:game.me.id, unit:game.me.unit, x:game.me.x, y:game.me.y};
     }
@@ -621,9 +647,8 @@ export function turn(game, steps, enemies, predators, prey, friends) {
         // Priority 2. Strategic calls
         if (steps > 6) { // wait till we know all the castles
             var known_stations = filter_known_friends((i, u, x, y) => 
-                u === SPECS.CASTLE || u === SPECS.CHURCH
+                (u === SPECS.CASTLE || u === SPECS.CHURCH) && x !== undefined && x !== null && y !== undefined && y !== null
             );
-            if (implied_enemy_castles === null) init_implied_castles(game);
             var strategy = canonical_strategic_move(game, steps, known_stations);
             if (strategy) var [action, msg] = i_should_do(game, steps, strategy, known_stations);
         }

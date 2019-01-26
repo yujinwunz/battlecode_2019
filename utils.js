@@ -77,6 +77,18 @@ export function in_fire_range(type, dist) {
     return true;
 }
 
+export function in_fire_range_full(type, dist) {
+    if (!SPECS.UNITS[type]) return false;
+    if (!SPECS.UNITS[type].ATTACK_RADIUS) return false;
+    if (dist < SPECS.UNITS[type].ATTACK_RADIUS[0]) return false; 
+    if (type === SPECS.PREACHER) {
+        if (dist > Math.pow(Math.sqrt(SPECS.UNITS[type].ATTACK_RADIUS[1]) + 1, 2)) return false;
+    } else {
+        if (dist > SPECS.UNITS[type].ATTACK_RADIUS[1]) return false;
+    }
+    return true;
+}
+
 export function threat_level(game, r) {
     var hp = SPECS.UNITS[r.unit].STARTING_HP;
     var hp_per_hit = SPECS.UNITS[r.unit].ATTACK_DAMAGE / hp;
