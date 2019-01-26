@@ -23,6 +23,9 @@ const CASTLE_TALK_TYPE_BITS = 2;
 const CASTLE_TALK_HEARTBEAT = 1;
 const CASTLE_TALK_REPORT_COORD = 2;
 const CASTLE_TALK_REPORT_ENEMY = 3;
+
+const DISTRESS_RADIUS = 300;
+
 var castle_talk_queue = [];
 var last_heartbeat = [null, null];
 

@@ -85,6 +85,8 @@ export function mining(game, steps, matrix, predators, target, target_trail, hom
 
     if (should_drop_off) {
         // go home and dump
+        // actually, go to any neighbour church and dump
+        var churches = friends.filter(f => f.unit === SPECS.CHRUCH || f.unit === SPECS.CASTLE);
         if (utils.adjacent(home, [game.me.x, game.me.y])) {
             action = game.give(home[0]-game.me.x, home[1]-game.me.y, game.me.karbonite, game.me.fuel);
         } else {
@@ -92,7 +94,11 @@ export function mining(game, steps, matrix, predators, target, target_trail, hom
                 if (utils.robots_collide(friends, [x, y])) return null;
                 if (utils.robots_collide(enemies, [x, y])) return null;
                 if (game.map[y][x] === false) return null;
-                if (utils.adjacent(home, [x, y])) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
+                var is_adj = false;
+                churches.forEach(h => {
+                    if (utils.adjacent(h, [x, y])) is_adj = true; 
+                });
+                if (is_adj) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
                 return -utils.dist([x, y], home) * 1000 - utils.dist([x, y], [game.me.x, game.me.y]);
             });
             if (nx !== game.me.x || ny !== game.me.y) { 
