@@ -101,7 +101,7 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
         game.log("initializing. Resource group:");
         var seen = utils.null_array(game.map[0].length, game.map[1].length);
         resource_group = [];
-        farm.dfs(game.map, game.karbonite_map, game.fuel_map, [game.me.x, game.me.y], seen, resource_group); 
+        farm.dfs(game.map, game.karbonite_map, game.fuel_map, [game.me.x, game.me.y], seen, resource_group, game.map[0].length, game.map.length, 36, 6); 
         game.log(resource_group);
     }
 

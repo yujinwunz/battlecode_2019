@@ -313,6 +313,16 @@ export function on_our_side(game, loc) {
     }
 }
 
+export function step_forward(game, loc, amount=1) {
+    if (game.symmetry === VERTICAL) {
+        if (game.me.team === 0) return [loc[0]+amount, loc[1]];
+        else return [loc[0]-amount, loc[1]];
+    } else {
+        if (game.me.team === 0) return [loc[0], loc[1]+amount];
+        else return [loc[0], loc[1]-amount];
+    }
+}
+
 export function in_distress(game, steps) {
     return game.last_castle_distress + 20 > steps;
 }

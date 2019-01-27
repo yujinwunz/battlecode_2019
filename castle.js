@@ -33,6 +33,8 @@ var karbonite_control = {};
 var fuel_control = {};
 
 var implied_enemy_castles = null;
+var anticipated_church_loc = [null, null];
+var expansion_attempts = {}; // if we expand and fail, maybe yall should try something else
 
 // These are received before turn is called.
 export function on_birth(game, r, unit) {
@@ -42,6 +44,15 @@ export function on_birth(game, r, unit) {
     if (unit === SPECS.CASTLE) {
         castles_remaining++;
         enemy_castles_remaining++; // implication
+    }
+    
+    if (unit === SPECS.CHURCH) {
+        if (game.turn < 60) { // Before churches can be built for mining optimization
+            if (anticipated_church_loc && anticipated_church_loc[0] !== null) {
+                known_friends[id].x = anticipated_church_loc[0];
+                known_friends[id].y = anticipated_church_loc[1];
+            }
+        }
     }
 
     if (warrior.is_warrior(unit)) {
@@ -58,8 +69,19 @@ export function on_ping(game, r, loc) {
         else known_friends[r.id].unit = SPECS.PROPHET;
     }
     var id = r.id;
-    if (loc[0] !== null) known_friends[id].x = loc[0];
-    if (loc[1] !== null) known_friends[id].y = loc[1];
+    if (loc[0] !== null) {
+        if (known_friends[id].unit === SPECS.CHURCH && "x" in known_friends[id] && known_friends[id].x !== loc[0]) {
+            game.log("assumption incorrect. we assumed church " + id + " was at x "+ known_friends[id].x + " but was actually at " + loc[0] + " " + (known_friends[id].x === loc[0]));
+        }
+        known_friends[id].x = loc[0];
+    }
+
+    if (loc[1] !== null) {
+        if (known_friends[id].unit === SPECS.CHURCH && "y" in known_friends[id] && known_friends[id].y !== loc[1]) {
+            game.log("assumption incorrect. we assumed church " + id + " was at y "+ known_friends[id].y + " but was actually at " + loc[1] + " " + (known_friends[id].y === loc[1]));
+        }
+        known_friends[id].y = loc[1];
+    }
 
     if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id] && r.turn > 10) {
         // Receiving a heartbeat means there are no enemies in sight.
@@ -210,7 +232,7 @@ function is_already_doing(loc) {
     for (var id in known_friends) {
         var r = known_friends[id];
         if (r.unit === SPECS.PILGRIM) {
-            if (utils.dist([r.x, r.y], loc) < 36) occupation++;
+            if (utils.dist([r.x, r.y], loc) < 25) occupation++;
         }
     }
     return occupation;
@@ -310,6 +332,12 @@ function sorted_build_list(game, steps, groups, station_locs) {
         });
         potential *= (mindist + BUILD_POTENTIAL_COST_CONST); // +10 to account that multiple legs are worse than single legs
         game.log("station " + v[0] + " " + v[1] + " would have dist adjusted potential of " + potential + " with " + min_loc[0] + " " + min_loc[1]);
+        var key = v[0]*64+v[1];
+        if (key in expansion_attempts) {
+            game.log("penalizing " + v[0] + " " + v[1] + " because we tried it " + expansion_attempts[key] + " times");
+            potential *= Math.pow(0.7, expansion_attempts[key]);
+            game.log("new potential, " + potential);
+        }
         by_potential.push([potential, l]);
     });
 
@@ -410,6 +438,13 @@ function i_should_do(game, steps, smove, known_stations) {
             return null;
         });
 
+        anticipated_church_loc = [arg[0], arg[1]]; // Don't have to wait for castle to send back coords to send out
+        var key = arg[0]*64+arg[1];
+        if (!(key in expansion_attempts)) {
+            expansion_attempts[key] = 0;
+        }
+        expansion_attempts[key] ++;
+        // another expedition
         if (castle.id === game.me.id) {
             // we should do something
             if (church.id === game.me.id) {

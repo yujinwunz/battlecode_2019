@@ -11,16 +11,16 @@ var last_target = null;
 var resource_group = null;
 var group_bounds = [(1<<30), -(1<<30), (1<<30), -(1<<30)];
 
-export function dfs(map, k_map, f_map, loc, seen, res, cols=null, rows=null) {
+export function dfs(map, k_map, f_map, loc, seen, res, cols=null, rows=null, dis=16, boxlen=4) {
     if (cols === null) cols = map[0].length;
     if (rows === null) rows = map.length;
     var [x, y] = loc;
     seen[y][x] = true;
     if (k_map[y][x] || f_map[y][x]) res.push([x, y]);
-    for (var nx = Math.max(0, x-4); nx <= Math.min(cols-1, x+4); nx++) {
-        for (var ny = Math.max(0, y-4); ny <= Math.min(rows-1, y+4); ny++) {
+    for (var nx = Math.max(0, x-boxlen); nx <= Math.min(cols-1, x+boxlen); nx++) {
+        for (var ny = Math.max(0, y-boxlen); ny <= Math.min(rows-1, y+boxlen); ny++) {
             if (seen[ny][nx]) continue;
-            if ((nx-x)*(nx-x) + (ny-y)*(ny-y) > 16) continue;
+            if ((nx-x)*(nx-x) + (ny-y)*(ny-y) > dis) continue;
             if (k_map[ny][nx] || f_map[ny][nx]) {
                 dfs(map, k_map, f_map, [nx, ny], seen, res, cols, rows);
             }
@@ -166,7 +166,7 @@ function get_a_target(game, friends) {
 function initialize(game) {
     var seen = utils.null_array(game.map[0].length, game.map.length);
     resource_group = [];
-    dfs(game.map, game.karbonite_map, game.fuel_map, [game.me.x, game.me.y], seen, resource_group);
+    dfs(game.map, game.karbonite_map, game.fuel_map, [game.me.x, game.me.y], seen, resource_group, game.map[0].length, game.map.length, 36, 6);
 
     resource_group.forEach(r => {
         group_bounds[0] = Math.min(group_bounds[0], r[0]);
@@ -211,12 +211,16 @@ export function turn(game, steps, enemies, friends) {
     if (num_pilgrims < needed) {
         game.log("building because we have " + num_pilgrims + " pilgrims but have " + needed + " resources");
         game.log(friends);
-        if (target[0] === null) throw "impossible";
+        if (target[0] === null) {
+            game.log("no target, impossible!");
+            return [null, msg];
+        }
 
         // Execution
         var action = null, msg = null;
-        if (target[0] !== null && resources_enough && last_target === null) {
-            var trail = nav.build_map(game.map, target, 2, nav.GAITS.SPRINT, [], 4);
+        if (target[0] !== null && resources_enough) {
+            game.log("building with target " + target[0] + " " + target[1]);
+            var trail = nav.build_map(game.map, target, 2, nav.GAITS.SPRINT, [], 5);
 
             var [sx, sy] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
                 if (utils.robots_collide(friends, [x, y])) return null;
@@ -228,16 +232,21 @@ export function turn(game, steps, enemies, friends) {
             if (sx === null) {
                 game.log("Caked in, can't build");
             } else {
-                game.log("gonna build");
+                game.log("gonna build at " + sx + " " + sy);
                 if (first_build && game.me.unit === SPECS.CHURCH) {
                     game.log("nullified");
                     first_build = false;
                 } else {
                     if (!utils.in_distress(game, steps)) {
+                        game.log("built");
                         action = game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y);
+                    } else {
+                        game.log("in distress");
                     }
                 }
             }
+        } else {
+            game.log("not enough resources " + game.karbonite + " " + game.fuel);
         }
     }
 
