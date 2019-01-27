@@ -114,13 +114,14 @@ export function get_church_locations(map, karbonite_map, fuel_map) {
             }
         }
 
+        /*
         // Use a single church for a resource group so close to the center
         // that it reflected into a clump
         if (maxc - minc <= 8) {
             ng.forEach(a => g.push(a));
         } else {
             groups.push(ng);
-        }
+        }*/
     }
 
     var churches = [];

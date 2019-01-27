@@ -12,7 +12,7 @@ const DEPLOY_TURTLE = 1;
 const RESOURCE_TARGETS = 2;
 const ENDGAME_POSSIBLE_THRESHOLD = 800;
 
-const BUILD_POTENTIAL_COST_CONST = 20;
+const BUILD_POTENTIAL_COST_CONST = 10;
 
 const MOBILE_ENEMY_DECAY = 30; // without seeing an enemy for that long assume it's dead
 
@@ -274,11 +274,14 @@ function sorted_build_list(game, steps, groups, station_locs) {
         // Once we have claimed our side of the contention it is time to move on.
         // Only once we've done all those then we realize our winning (and go on to win).
         if (utils.on_our_side(game, loc)) {
-            if (dist <= 4) value *= 16;
-            else if (dist <= 6) value *= 8;
-            else if (dist <= 8) value *= 4;
-            else if (dist <= 10) value *= 2;
-            else if (dist <= 12) value *= 1.5;
+            if (steps < 60) { // Only focus on the center at the start
+                // afterwards, don't forget the back
+                if (dist <= 4) value *= 6;
+                else if (dist <= 6) value *= 6;
+                else if (dist <= 8) value *= 4;
+                else if (dist <= 10) value *= 2;
+                else if (dist <= 12) value *= 1.5;
+            }
         } else {
             value /= 30; // Give MUCH less priorites on opponent forces until we get our own shit sorted.
             // This is necessary because our knowledge of the opponent is not accurate since we don't have scouts.

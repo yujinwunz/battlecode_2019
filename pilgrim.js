@@ -49,12 +49,12 @@ function num_dangling_resources(game, steps, loc, churches) {
 
 function expand_church(game, steps, friends) {
     // As game gets more progressive, we need to build more stuff.
-    if (steps < 80) return null;
+    if (steps < 50) return null;
     if (!game.karbonite_map[game.me.y][game.me.x] 
         && !game.fuel_map[game.me.y][game.me.x]) return null;
 
-    if (game.karbonite_target < 200) return null;
-    if (game.fuel_target < 1000) return null;
+    //if (game.karbonite_target < 100) return null;
+    //if (game.fuel_target < 500) return null;
 
     var churches = friends.filter(f => 
         (f.unit === SPECS.CHURCH || f.unit === SPECS.CASTLE)
@@ -74,7 +74,7 @@ function expand_church(game, steps, friends) {
         var benefit = num_dangling_resources(game, steps, [bx, by], churches);
         
         // Janky heuristics here
-        if (game.fuel*(benefit/1.5)-200 >= game.fuel_target && game.karbonite*(benefit/1.5)-50 >= game.karbonite_target) {
+        if (game.fuel*(benefit/1.5)-100 >= game.fuel_target && game.karbonite*(benefit/1.5)-50 >= game.karbonite_target) {
             game.log("Building auxilary church at " + bx + " " + by + " with benefit " + benefit);
             
             if (utils.robots_collide(friends, [bx, by])) {
