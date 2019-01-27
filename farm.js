@@ -173,10 +173,10 @@ function initialize(game) {
         group_bounds[3] = Math.max(group_bounds[3], r[1]);
     });
 
-    group_bounds[0] --;
-    group_bounds[1] ++;
-    group_bounds[2] --;
-    group_bounds[3] ++;
+    group_bounds[0] -=2;
+    group_bounds[1] +=2;
+    group_bounds[2] -=2;
+    group_bounds[3] +=2;
 }
 
 var first_build = true;
@@ -194,6 +194,11 @@ export function turn(game, steps, enemies, friends) {
         return f.unit === SPECS.PILGRIM && f.x >= group_bounds[0] && f.x <= group_bounds[1] && f.y >= group_bounds[2] && f.y <= group_bounds[3];
     }).length;
    
+
+    if (game.in_battle + 5 > steps) { // Sometimes pilgrims run away during battle so look for them further away.
+                                        // only after 5 steps and they still haven't returned, then it's a problem.
+        num_pilgrims = friends.filter(f => f.unit === SPECS.PILGRIM).length;
+    }
 
     if (num_pilgrims < resource_group.length) {
         game.log("building because we have " + num_pilgrims + " pilgrims but have " + resource_group.length + " resources");

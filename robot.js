@@ -166,6 +166,7 @@ class MyRobot extends BCAbstractRobot {
         var action = null, msg = null;
 
         var [enemies, predators, prey, blindspot, friends] = utils.glance(this);
+        if (predators.length) this.in_battle = steps;
         if (steps === 1) {
             this.log(this.me);
             this.symmetry = utils.symmetry(this.map);

@@ -103,11 +103,11 @@ export function build_map(pass_map, target, max_jump=4, gait=0, robots=[], max_t
 
 var map_cache = {};
 
-// Assume we use the same pass map every time
-export function build_map_cached(pass_map, target, max_jump=4, gait=0, max_t=(1<<30)) {
-    var key = target[0] + "," + target[1] + "," + max_jump + " " + gait + " " + max_t;
-    if (key in map_cache) return map_cache(key);
-    map_cache[key] = build_map(pass_map, target, max_jump, gait, [], max_t);
+// Assume we use the same pass map every time.
+export function build_map_cached(pass_map, target, max_jump=4, gait=0, max_t=(1<<30), blocks=[]) {
+    var key = target[0] + "," + target[1] + "," + max_jump + " " + gait + " " + max_t + " " + blocks;
+    if (key in map_cache) return map_cache[key];
+    map_cache[key] = build_map(pass_map, target, max_jump, gait, blocks.map(b=>{return{x:b[0],y:b[1]}}), max_t);
     return map_cache[key];
 }
 

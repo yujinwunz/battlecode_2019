@@ -32,6 +32,60 @@ export function listen_orders(game) {
     return orders;
 }
 
+function num_dangling_resources(game, steps, loc, churches) {
+    var ans = 0;
+    utils.iterlocs(game.map[0].length, game.map.length, loc, 2, (x, y) => {
+        // A dangling reosurce is one where a pilgrim has to travel to deposit.
+        if (game.karbonite_map[y][x] || game.fuel_map[y][x]) {
+            var mindist = (1<<30);
+            churches.forEach(f => {
+                mindist = Math.min(mindist, utils.dist([f.x, f.y], [x, y]));
+            });
+            if (mindist > 2) ans += 1. + 0.1 * mindist;
+        }
+    });
+    return ans;
+}
+
+function expand_church(game, steps, friends) {
+    // As game gets more progressive, we need to build more stuff.
+    if (steps < 80) return null;
+    if (!game.karbonite_map[game.me.y][game.me.x] 
+        && !game.fuel_map[game.me.y][game.me.x]) return null;
+
+    if (game.karbonite_target < 200) return null;
+    if (game.fuel_target < 1000) return null;
+
+    var churches = friends.filter(f => 
+        (f.unit === SPECS.CHURCH || f.unit === SPECS.CASTLE)
+    );
+
+    var [bx, by] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+        if (game.map[y][x] === false) return null;
+        if (game.karbonite_map[y][x] || game.fuel_map[y][x]) return null;
+        var penalty = 0; // don't build adjacent to existing ones
+        churches.forEach(c => {
+            if (utils.adjacent([c.x, c.y], [x, y])) penalty += 0.5;
+        });
+        return num_dangling_resources(game, steps, [x, y], churches) - penalty;
+    });
+
+    if (bx !== null) {
+        var benefit = num_dangling_resources(game, steps, [bx, by], churches);
+        
+        // Janky heuristics here
+        if (game.fuel*(benefit/1.5)-200 >= game.fuel_target && game.karbonite*(benefit/1.5)-50 >= game.karbonite_target) {
+            game.log("Building auxilary church at " + bx + " " + by + " with benefit " + benefit);
+            return game.buildUnit(SPECS.CHURCH, bx-game.me.x, by-game.me.y);
+        } else {
+            game.log("Would build but our resources are under budget kt k ft f " + 
+                game.karbonite_target + " " + game.karbonite + " " + game.fuel_target + 
+                " " + game.fuel + " benefit " + benefit);
+        }
+    }
+    return null;
+}
+
 var last_attacker_seen = -(1<<30);
 var resource_group = null;
 var mining_target = null;
@@ -93,10 +147,6 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
     }
 
     var churches = friends.filter(f => f.unit === SPECS.CHURCH || f.unit === SPECS.CASTLE);
-    game.log("nearby churches:");
-    game.log(churches);
-    game.log(friends);
-    game.log("I am at " + game.me.x + " " + game.me.y);
     if (should_drop_off) {
         // go home and dump
         // actually, go to any neighbour church and dump
@@ -107,26 +157,30 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
         if (loc) {
             action = game.give(loc.x-game.me.x, loc.y-game.me.y, game.me.karbonite, game.me.fuel);
         } else {
-            var closest = utils.argmax(churches, c => {
-                return -utils.dist([c.x, c.y], [game.me.x, game.me.y]);
-            });
-            game.log("voyaging home. closest is");
-            game.log(closest);
-            if (!closest) closest = home;
-            game.log(closest);
-            var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
-                if (utils.robots_collide(friends, [x, y])) return null;
-                if (utils.robots_collide(enemies, [x, y])) return null;
-                if (game.map[y][x] === false) return null;
-                var is_adj = false;
-                churches.forEach(h => {
-                    if (utils.adjacent(h, [x, y])) is_adj = true; 
+            // consider building a nearby church
+            action = expand_church(game, steps, friends);
+
+            if (!action) {
+                var closest = utils.argmax(churches, c => {
+                    return -utils.dist([c.x, c.y], [game.me.x, game.me.y]);
                 });
-                if (is_adj) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
-                return -utils.dist([x, y], [closest.x, closest.y]) * 1000 - utils.dist([x, y], [game.me.x, game.me.y]);
-            });
-            if (nx !== game.me.x || ny !== game.me.y) { 
-                if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+                if (!closest) closest = home;
+                var trail = nav.build_map_cached(game.map, [closest.x, closest.y], SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.SPRINT, 10, resource_group);
+                var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
+                    if (utils.robots_collide(friends, [x, y])) return null;
+                    if (utils.robots_collide(enemies, [x, y])) return null;
+                    if (game.map[y][x] === false) return null;
+                    var is_adj = false;
+                    churches.forEach(h => {
+                        if (utils.adjacent(h, [x, y])) is_adj = true; 
+                    });
+                    if (is_adj) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
+                    if (!trail[y][x]) return null;
+                    return -trail[y][x][0] * 1000 - trail[y][x][1];
+                });
+                if (nx !== game.me.x || ny !== game.me.y) { 
+                    if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+                }
             }
         }
     } else if (at_target) {
@@ -137,9 +191,8 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
         if (mining_target === null || utils.robots_collide(friends.filter(f => f.unit === SPECS.PILGRIM), mining_target)) {
             // Time for a new target
             var target = utils.argmax(resource_group, f => {
-                if (utils.robots_collide(friends, f)) return null;
+                if (utils.robots_collide(friends, f) && (f[0] !== game.me.x || f[1] !== game.me.y)) return null;
                 var dist = utils.dist(f, [game.me.x, game.me.y]);
-                if (game.karbonite_map[f[1]][f[0]]) return 1000-dist;
                 return -dist;
             });
 
