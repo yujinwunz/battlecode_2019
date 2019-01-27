@@ -12,6 +12,8 @@ const DEPLOY_TURTLE = 1;
 const RESOURCE_TARGETS = 2;
 const ENDGAME_POSSIBLE_THRESHOLD = 800;
 
+const BUILD_POTENTIAL_COST_CONST = 20;
+
 const MOBILE_ENEMY_DECAY = 30; // without seeing an enemy for that long assume it's dead
 
 var known_friends = {};
@@ -163,23 +165,24 @@ function getcode(smove) {
     }
 }
 
-function get_unused_churches(game, steps) {
+function get_unused_groups(game, steps) {
     var known_churches = filter_known_friends((i, u, x, y) => 
         u === SPECS.CASTLE || u === SPECS.CHURCH
     );
-    var churches_to_go = [];
+    var groups_to_go = [];
 
-    church_locs.forEach(c => {
+    for (var i = 0; i < church_locs.length; i++) {
         var ok = true;
+        var c = church_locs[i];
         known_churches.forEach(kc => {
             if (utils.dist(c, [kc.x, kc.y]) < farm.RESOURCE_MAX_R) ok = false;
         });
         var code = getcode([EXPAND, c]); // to avoid having to wait for one
                                                   // to finish before building another
-        if (ok) churches_to_go.push(c);
-    })
+        if (ok) groups_to_go.push([c, group_locs[i]]);
+    };
 
-    return churches_to_go;
+    return groups_to_go;
 }
 
 function is_enemy_fortified(loc) {
@@ -216,7 +219,109 @@ function is_already_doing(loc) {
 var resources_replenished = true;
 var last_num_stations = 0;
 
+// The potential is sum of (distance * value) of curches we have left to build.
+// It estimates the amount of "value" we have yet to extract.
+// Lowering the potential means gaining expansion progress.
+function get_potential(game, steps, byvalue, station_locs) {
+    var ans = 0;
+    game.log("If we had ");
+    game.log(station_locs);
+    byvalue.forEach(g => {
+        var [v, l] = g;
+        var min_potential = (1<<30);
+        var min_station = [null, null];
+        game.log(l);
+        station_locs.forEach(sl => {
+            var pot = (Math.sqrt(utils.dist(sl, l)) + BUILD_POTENTIAL_COST_CONST) * v;
+            if (sl[0] === l[0] && sl[1] === l[1]) pot = 0;
+            if (pot < min_potential) {
+                min_potential = pot;
+                min_station = sl;
+            }
+        });
+        game.log("^would have potential " + min_potential + " with " + min_station[0] + " " + min_station[1]);
+        ans += min_potential;
+    });
+    game.log("total potential: " + ans);
+    return ans;
+}
+
+function sorted_build_list(game, steps, groups, station_locs) {
+    // Find the ones that are in contention, and sprint for those.
+
+    // We will give weights to each one. Then, add more weight to how close they are to other
+    // heavyweights (pseudo-bfs). Finally penalize with distance and return the sorted result.
+
+    var byvalue = [];
+
+    groups.forEach(g => {
+        var [loc, places] = g;
+        var value = 0;
+        places.forEach(l => {
+            if (game.karbonite_map[l[1]][l[0]]) value += 1;
+            else value += 0.4;
+        });
+
+        // Give very high weight to ones in the center because those will decide the game.
+        var dist;
+        if (game.symmetry === utils.VERTICAL) {
+            dist = Math.abs(loc[0] - game.map.length/2);
+        } else {
+            dist = Math.abs(loc[1] - game.map.length/2);
+        }
+
+        // The "contention" multipliers only apply once so do it for our side.
+        // Once we have claimed our side of the contention it is time to move on.
+        // Only once we've done all those then we realize our winning (and go on to win).
+        if (utils.on_our_side(game, loc)) {
+            if (dist <= 4) value *= 16;
+            else if (dist <= 6) value *= 8;
+            else if (dist <= 8) value *= 4;
+            else if (dist <= 10) value *= 2;
+            else if (dist <= 12) value *= 1.5;
+        } else {
+            value /= 30; // Give MUCH less priorites on opponent forces until we get our own shit sorted.
+            // This is necessary because our knowledge of the opponent is not accurate since we don't have scouts.
+            // We are prone to assume that the opponent squares are unoccupued even though they are. So we adjust
+            // this algorithm manually here to disregard that.
+        }
+
+        byvalue.push([value, loc]);
+    });
+
+    var by_potential = [];
+
+    // We want to find nodes that will improve the "potential"
+    var currpotential = get_potential(game, steps, byvalue, station_locs);
+    byvalue.forEach(v => {
+        var [_, l] = v;
+        var potential = get_potential(game, steps, byvalue, station_locs.concat([l]));
+        var mindist = (1<<30);
+        var min_loc = [null, null];
+        station_locs.forEach(s => {
+            var tmp = Math.sqrt(utils.dist(s, l));
+            if (tmp < mindist) {
+                mindist = tmp;
+                min_loc = s;
+            }
+        });
+        potential *= (mindist + BUILD_POTENTIAL_COST_CONST); // +10 to account that multiple legs are worse than single legs
+        game.log("station " + v[0] + " " + v[1] + " would have dist adjusted potential of " + potential + " with " + min_loc[0] + " " + min_loc[1]);
+        by_potential.push([potential, l]);
+    });
+
+    by_potential.sort((a, b) => a[0] - b[0]);
+    game.log("calculated potentials");
+    game.log(by_potential);
+    game.log("using stations");
+    game.log(station_locs);
+    return by_potential.map(a => a[1]);
+}
+
+// Remember that this depends on all (potentially) 3 castles arriving on the same conclusion and executing
+// synchronously, so to avoid needing to communicate amongst them.
 function canonical_strategic_move(game, steps, known_stations) {
+    var station_locs = known_stations.map(s => [s.x, s.y]);
     if (game.karbonite >= 50 && game.fuel >= 200) resources_replenished = true;
     if (known_stations.length > last_num_stations) resources_replenished = true;
 
@@ -236,43 +341,26 @@ function canonical_strategic_move(game, steps, known_stations) {
     }
 
     // Consider building churches.
-    var to_build_list = get_unused_churches(game, steps);
+    var available_groups_list = get_unused_groups(game, steps);
 
-    // To choose a next place, consider A) if it's fortified B) if it's occupied
-    // If it's fortified or occupied, we must clear it first. Then we expand later.
-
-    // Finally, don't build on opponent side until available our sides are done.
-    var to_build = utils.argmax(to_build_list, loc => {
+    available_groups_list.filter(g => {
+        var [loc, group] = g;
 
         if (is_enemy_fortified(loc)) {
             game.log(steps + " is fortified: " + loc[0] + " " + loc[1] + ": " + is_enemy_fortified(loc));
-            return null;
-        }
-        if (is_enemy_occupied(loc)) {
-            game.log(steps + " is occupied: " + loc[0] + " " + loc[1] + ": " + is_enemy_occupied(loc));
-            return null;
+            return false;
         }
         if (game.karbonite < 50 && is_already_doing(loc)) {
             // Probably strapped for karbonite to build church, just wait for it
             game.log(steps + " is already doing: " + loc[0] + " " + loc[1]);
             return null;
         }
+    })
 
-        var mindis = (1<<30);
-        known_stations.forEach(m => {
-            game.log(m);
-            game.log(loc);
-            mindis = Math.min(mindis, utils.dist([m.x, m.y], loc))
-        });
-        game.log("location " + loc[0] + " " + loc[1] + " mindist " + mindis);
-        if (utils.on_our_side(game, loc)) {
-            game.log("was our side");
-            return -mindis;
-        } else {
-            game.log("was not our side");
-            return -mindis - 1000;
-        }
-    });
+    var to_build_list = sorted_build_list(game, steps, available_groups_list, station_locs);
+    // Just get the top tobuild. Just do it.
+    var to_build = null;
+    if (to_build_list.length) to_build = to_build_list[0];
 
     if (to_build && !utils.in_distress(game, steps) && resources_replenished) {
         resources_replenished = false;

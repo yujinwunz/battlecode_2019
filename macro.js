@@ -6,6 +6,11 @@ import * as nav from 'nav.js';
 export const KARBONITE_LEVELS = [50, 70, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 7500, 10000, 15000]; // 16 vals
 export const FUEL_LEVELS = [150, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000]; // 16 vals
 
+// Usually fuel is not a limited resource in the very early game, yet karbonite is crucial for the "space race" while defending against
+// surprise rushes.
+export const FUEL_EMBARGO = 10; // After how many turns are we allowed to build pilgrims for fuel? 
+
+
 export function emission_params(karbonite, fuel) {
     var karb = 0, f = 0;
     for (var i = 0; i < 16; i++) {

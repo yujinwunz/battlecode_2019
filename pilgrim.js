@@ -76,6 +76,11 @@ function expand_church(game, steps, friends) {
         // Janky heuristics here
         if (game.fuel*(benefit/1.5)-200 >= game.fuel_target && game.karbonite*(benefit/1.5)-50 >= game.karbonite_target) {
             game.log("Building auxilary church at " + bx + " " + by + " with benefit " + benefit);
+            
+            if (utils.robots_collide(friends, [bx, by])) {
+                game.log("cancelled");
+                return null;
+            }
             return game.buildUnit(SPECS.CHURCH, bx-game.me.x, by-game.me.y);
         } else {
             game.log("Would build but our resources are under budget kt k ft f " + 

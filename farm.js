@@ -2,6 +2,7 @@ import {BCAbstractRobot, SPECS} from 'battlecode';
 import {Message, decode} from 'message.js';
 import * as utils from 'utils.js';
 import * as nav from 'nav.js';
+import * as macro from 'macro.js';
 
 export const RESOURCE_MAX_R = 36;
 
@@ -200,8 +201,14 @@ export function turn(game, steps, enemies, friends) {
         num_pilgrims = friends.filter(f => f.unit === SPECS.PILGRIM).length;
     }
 
-    if (num_pilgrims < resource_group.length) {
-        game.log("building because we have " + num_pilgrims + " pilgrims but have " + resource_group.length + " resources");
+    var needed = resource_group.length;
+    if (steps < macro.FUEL_EMBARGO) {
+        // At the start, don't spend pilgrims getting fuel since we need karbonite urgently for expansion and
+        // possible urgent defense.
+        needed = resource_group.filter(l => game.karbonite_map[l[1]][l[0]]).length;
+    }
+    if (num_pilgrims < needed) {
+        game.log("building because we have " + num_pilgrims + " pilgrims but have " + needed + " resources");
         game.log(friends);
         if (target[0] === null) throw "impossible";
 
