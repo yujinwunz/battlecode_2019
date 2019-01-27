@@ -554,6 +554,8 @@ function get_backup_message(game, steps, enemies, range=64) {
     return null;
 }
 
+var last_savior_loc = [null, null];
+
 function defense(game, steps, enemies, predators, prey, friends) {
     var precaution_build = false;
     if (steps === 4) {
@@ -724,10 +726,30 @@ function defense(game, steps, enemies, predators, prey, friends) {
             if (game.map[y][x] === false) return null;
             if (utils.robots_collide(friends, [x, y])) return null;
             if (utils.robots_collide(enemies, [x, y])) return null;
-            return Math.random();
+            var same = x === last_savior_loc[0] && y === last_savior_loc[1];
+
+            if (savior === SPECS.PREACHER) {
+                // If it's preacher, top right and top left diagonals preferred, alternating
+                if (utils.on_our_side(game, [game.me.x, game.me.y], [x, y])) {
+                    if (game.me.x !== x && game.me.y !== y) {
+                        return 2 - same*2;
+                    } else return 0 - same*2; // straight up / side to side, not ideal but whatevs
+                }
+                return -3; // do NOT send a preacher backwards unless forced
+            } else if (savior === SPECS.PROPHET) {
+                if (utils.on_our_side(game, [game.me.x, game.me.y], [x, y]) && utils.on_our_side(game, [x, y], [game.me.x, game.me.y])) {
+                    // send prophet sideways
+                    return 2 - same*2;
+                } else {
+                    // diagonal is cool too
+                    if (x !== game.me.x && y !== game.me.y) return 1 - same*2;
+                    return 0-same*2; // forwards or back wards directly not as cool.
+                }
+            }
         });
 
         if (turtle[0] !== null) {
+            last_savior_loc = turtle;
             if (game.karbonite >= SPECS.UNITS[savior].CONSTRUCTION_KARBONITE &&
                 game.fuel >= SPECS.UNITS[savior].CONSTRUCTION_FUEL) {
                 if (!msg) msg = get_backup_message(game, steps, enemies, 2);
