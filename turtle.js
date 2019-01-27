@@ -150,43 +150,58 @@ var dream_loc = null;
 var dream_trail = null;
 var turtle_trail = {};
 
+var last_trail = null;
+
 export function turn(game, steps, matrix, enemies, friends) {
     var start = new Date().getTime();
     if (steps === 1) first_location = [game.me.x, game.me.y];
     prepare_turtle(game, [game.me.x, game.me.y], enemies, friends);
     if (is_turtle(game, steps, [game.me.x, game.me.y], friends)) return [null, null];
 
-    // Not turtle so find turtle
-    var loc = closest_visible_turtle(game, steps, enemies, friends);
+    var trail = last_trail;
+    if (trail === null || steps%3 === 1) {
+        // Not turtle so find turtle
+        var loc = closest_visible_turtle(game, steps, enemies, friends);
 
-    var trail = null;
-    if (loc[0] === null) {
-        // if whole view is crystalized, go to random point on map not in view.
-        var changed = false;
-        var iters = 0;
-        while ((iters < 100) && (dream_loc === null 
-                    || utils.dist(dream_loc, [game.me.x, game.me.y]) <= SPECS.UNITS[game.me.unit].VISION_RADIUS)) {
+        var trail = null;
+        if (loc[0] === null) {
+            // if whole view is crystalized, go to random point on map not in view.
+            var changed = false;
+            var iters = 0;
 
-            iters++;
-            dream_loc = [Math.floor(Math.random()*game.map.length), Math.floor(Math.random()*game.map[0].length)];
-            changed = true;
+            while (iters < 100) {
+                var ok = true;
+                if (dream_loc === null) ok = false;
+                else {
+                    if (utils.dist(dream_loc, [game.me.x, game.me.y]) <= SPECS.UNITS[game.me.unit].VISION_RADIUS) ok = false;
+                    if (game.me.unit === SPECS.CRUSADER) {
+                        // Crusaders dream to go backwards
+                        if (!utils.on_our_side(game, dream_loc, [game.me.x, game.me.y])) ok = false;
+                    }
+                }
+                if (ok) break;
+
+                iters++;
+                dream_loc = [Math.floor(Math.random()*game.map.length), Math.floor(Math.random()*game.map[0].length)];
+                changed = true;
+            }
+
+            if (changed) {
+                dream_trail = nav.build_map(game.map, dream_loc, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.WALK);
+            }
+            trail = dream_trail;
+        } else {
+            if (!(loc[0]*64+loc[1] in turtle_trail)) {
+                turtle_trail[loc[0]*64+loc[1]] = nav.build_map(game.map, loc, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.WALK);
+            }
+            trail = turtle_trail[loc[0]*64+loc[1]];
         }
-        if (changed) {
-            dream_trail = nav.build_map(game.map, dream_loc, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.WALK);
-        }
-        trail = dream_trail;
-    } else {
-        if (!(loc[0]*64+loc[1] in turtle_trail)) {
-            turtle_trail[loc[0]*64+loc[1]] = nav.build_map(game.map, loc, SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.WALK);
-        }
-        trail = turtle_trail[loc[0]*64+loc[1]];
+        last_trail = trail;
     }
 
     var [x, y] = nav.path_step(trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, enemies.concat(friends));
     if (x !== null && (x !== game.me.x || y !== game.me.y)) {
-        game.log(steps + " turtling turn took " + (new Date().getTime()-start));
         return [game.move(x - game.me.x, y - game.me.y), null];
     }
-    game.log(steps + " turtling turn took " + (new Date().getTime()-start));
     return [null, null];
 }

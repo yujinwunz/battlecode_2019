@@ -57,7 +57,6 @@ export function print_map(console, map) {
             while (t.length < 6) t += " ";
             p += t;
         }
-        console.log(p);
     }
 }
 
@@ -130,7 +129,6 @@ export function look(game, target_id) {
         if (!("type" in r)) return;
         if (!("x" in r)) return;
         if (!("team" in r)) return;
-        game.log("in look, robot type was " + r.unit);
         
         if (r.team === game.me.team) {
             friendly.push(r);
@@ -144,7 +142,6 @@ export function look(game, target_id) {
             if (in_fire_range(r.unit, dist) && in_fire_range(game.me.unit, dist)) {
                 confronting.push(r);
             }
-            game.log("was enemy. dist: " + dist + " unit: " + r.unit + " exposed: " + in_fire_range(r.unit, dist) + " in range: " + in_fire_range(game.me.unit, dist));
         }
 
         if (r.id === target_id) {
@@ -168,7 +165,6 @@ export function get_home(game, friendly) {
     });
 
     if (retval) return retval;
-    game.log("Could not find original home for this guy");
 }
 
 export function robots_collide(robots, coord) {

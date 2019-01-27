@@ -212,17 +212,13 @@ export function turn(game, steps, enemies, friends) {
         needed = resource_group.filter(l => game.karbonite_map[l[1]][l[0]]).length;
     }
     if (num_pilgrims < needed) {
-        game.log("building because we have " + num_pilgrims + " pilgrims but have " + needed + " resources");
-        game.log(friends);
         if (target[0] === null) {
-            game.log("no target, impossible!");
             return [null, msg];
         }
 
         // Execution
         var action = null, msg = null;
         if (target[0] !== null && resources_enough) {
-            game.log("building with target " + target[0] + " " + target[1]);
             var trail = nav.build_map(game.map, target, 2, nav.GAITS.SPRINT, [], 5);
 
             var [sx, sy] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
@@ -235,16 +231,11 @@ export function turn(game, steps, enemies, friends) {
             if (sx === null) {
                 game.log("Caked in, can't build");
             } else {
-                game.log("gonna build at " + sx + " " + sy);
                 if (first_build && game.me.unit === SPECS.CHURCH) {
-                    game.log("nullified");
                     first_build = false;
                 } else {
                     if (!utils.in_distress(game, steps)) {
-                        game.log("built");
                         action = game.buildUnit(SPECS.PILGRIM, sx-game.me.x, sy-game.me.y);
-                    } else {
-                        game.log("in distress");
                     }
                 }
             }

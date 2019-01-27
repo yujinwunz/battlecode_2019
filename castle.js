@@ -39,7 +39,6 @@ var expansion_attempts = {}; // if we expand and fail, maybe yall should try som
 // These are received before turn is called.
 export function on_birth(game, r, unit) {
     var id = r.id;
-    game.log("Birth of " + id + " type " + unit);
     known_friends[id] = {unit, id};
     if (unit === SPECS.CASTLE) {
         castles_remaining++;
@@ -70,27 +69,16 @@ export function on_ping(game, r, loc) {
     }
     var id = r.id;
     if (loc[0] !== null) {
-        if (known_friends[id].unit === SPECS.CHURCH && "x" in known_friends[id] && known_friends[id].x !== loc[0]) {
-            game.log("assumption incorrect. we assumed church " + id + " was at x "+ known_friends[id].x + " but was actually at " + loc[0] + " " + (known_friends[id].x === loc[0]));
-        }
         known_friends[id].x = loc[0];
     }
 
     if (loc[1] !== null) {
-        if (known_friends[id].unit === SPECS.CHURCH && "y" in known_friends[id] && known_friends[id].y !== loc[1]) {
-            game.log("assumption incorrect. we assumed church " + id + " was at y "+ known_friends[id].y + " but was actually at " + loc[1] + " " + (known_friends[id].y === loc[1]));
-        }
         known_friends[id].y = loc[1];
     }
 
     if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id] && r.turn > 10) {
         // Receiving a heartbeat means there are no enemies in sight.
         // On record, forget all known enemy castles and churches in it's vision range.
-        if (!(id in known_friends)) {
-            game.log("Ping from the dead:");
-            game.log(id);
-            game.log(known_friends);
-        }
 
         var unit = known_friends[id].unit;
         if (unit === SPECS.CASTLE || unit === SPECS.CHURCH) {
@@ -101,7 +89,6 @@ export function on_ping(game, r, loc) {
         }
         implied_enemy_castles.forEach(f => {
             if (utils.dist(f, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS) {
-                game.log("observed the defeat of enemy castle at " + f[0] + " " + f[1]);
                 enemy_castles_remaining--;
             }
         });
@@ -113,8 +100,6 @@ export function on_ping(game, r, loc) {
 
 export function on_death(game, id) {
     if (!(id in known_friends)) {
-        game.log("death from the dead:");
-        game.log(id);
         return;
     }
 
@@ -135,17 +120,14 @@ export function on_death(game, id) {
         }
     }
 
-    game.log("Death of " + id);
     if (unit === SPECS.CASTLE) castles_remaining--;
     delete known_friends[id];
 }
 
 export function on_warrior_sighting(game, steps, r, dx, dy) {
-    game.log("warrior sighting called");
     if (!(r.id in known_friends)) return;
     var r = known_friends[r.id];
     if ("x" in r && "y" in r) {
-        game.log("warrior sighted " + (r.x+dx*3-11) + " " + (r.y+dy*3-11));
         enemy_warrior_sightings.push([steps, r.x + dx*3-11, r.y + dy*3-11]);
     }
 }
@@ -161,13 +143,9 @@ export function on_civilian_sighting(game, steps, r, dx, dy) {
 const MEMORY = 10;
 
 function prune_known_enemies(game, steps) {
-    game.log("pruning");
     while (enemy_civilian_sightings.length > 0 && enemy_civilian_sightings[0][0] + MEMORY < steps) enemy_civilian_sightings.shift(0); 
     while (enemy_warrior_sightings.length > 0 && enemy_warrior_sightings[0][0] + MEMORY < steps) {
-        game.log("forgetting warrior sighting " + enemy_warrior_sightings.length);
-        game.log(enemy_warrior_sightings[0]);
         enemy_warrior_sightings.shift(0); 
-        game.log("now has " + enemy_warrior_sightings.length);
     }
 }
 
@@ -194,8 +172,6 @@ function getcode(smove) {
 }
 
 function get_unused_groups(game, steps) {
-    game.log("getting unused groups");
-    game.log(church_locs);
     var known_churches = filter_known_friends((i, u, x, y) => 
         u === SPECS.CASTLE || u === SPECS.CHURCH
     );
@@ -254,13 +230,10 @@ var last_num_stations = 0;
 // Lowering the potential means gaining expansion progress.
 function get_potential(game, steps, byvalue, station_locs) {
     var ans = 0;
-    game.log("If we had ");
-    game.log(station_locs);
     byvalue.forEach(g => {
         var [v, l] = g;
         var min_potential = (1<<30);
         var min_station = [null, null];
-        game.log(l);
         station_locs.forEach(sl => {
             var pot = (Math.sqrt(utils.dist(sl, l)) + BUILD_POTENTIAL_COST_CONST) * v;
             if (sl[0] === l[0] && sl[1] === l[1]) pot = 0;
@@ -269,10 +242,8 @@ function get_potential(game, steps, byvalue, station_locs) {
                 min_station = sl;
             }
         });
-        game.log("^would have potential " + min_potential + " with " + min_station[0] + " " + min_station[1]);
         ans += min_potential;
     });
-    game.log("total potential: " + ans);
     return ans;
 }
 
@@ -339,21 +310,14 @@ function sorted_build_list(game, steps, groups, station_locs) {
             }
         });
         potential *= (mindist + BUILD_POTENTIAL_COST_CONST); // +10 to account that multiple legs are worse than single legs
-        game.log("station " + v[0] + " " + v[1] + " would have dist adjusted potential of " + potential + " with " + min_loc[0] + " " + min_loc[1]);
         var key = v[0]*64+v[1];
         if (key in expansion_attempts) {
-            game.log("penalizing " + v[0] + " " + v[1] + " because we tried it " + expansion_attempts[key] + " times");
             potential *= Math.pow(0.7, expansion_attempts[key]);
-            game.log("new potential, " + potential);
         }
         by_potential.push([potential, l]);
     });
 
     by_potential.sort((a, b) => a[0] - b[0]);
-    game.log("calculated potentials");
-    game.log(by_potential);
-    game.log("using stations");
-    game.log(station_locs);
     return by_potential.map(a => a[1]);
 }
 
@@ -386,12 +350,10 @@ function canonical_strategic_move(game, steps, known_stations) {
         var [loc, group] = g;
 
         if (is_enemy_fortified(loc)) {
-            game.log(steps + " is fortified: " + loc[0] + " " + loc[1] + ": " + is_enemy_fortified(loc));
             return false;
         }
         if (game.karbonite < 50 && is_already_doing(loc)) {
             // Probably strapped for karbonite to build church, just wait for it
-            game.log(steps + " is already doing: " + loc[0] + " " + loc[1]);
             return null;
         }
     })
@@ -403,13 +365,9 @@ function canonical_strategic_move(game, steps, known_stations) {
 
     if (to_build && !utils.in_distress(game, steps) && resources_replenished) {
         last_num_stations = known_stations.length;
-        game.log(steps + " Considering building at " + to_build[0] + " " + to_build[1]);
-        game.log("my choices were:");
-        game.log(to_build_list);
         return [EXPAND, to_build]; 
     }
 
-    game.log("No strategic decision");
     // Returns a strategic decision (not move). It's up to the caller to implement that.
 }
 
@@ -456,7 +414,7 @@ function i_should_do(game, steps, smove, known_stations) {
             // we should do something
             if (church.id === game.me.id) {
                 // we are the expander.
-                throttle[code] = steps + 10 + Math.sqrt(utils.dist(arg, [game.me.x, game.me.y]));
+                throttle[code] = steps + Math.max(10, (steps-100)/5) + Math.sqrt(utils.dist(arg, [game.me.x, game.me.y]));
                 return launch_expedition(game, arg);
             } else {
                 // signal to the church
@@ -464,7 +422,7 @@ function i_should_do(game, steps, smove, known_stations) {
                 // died somewhere.
                 game.log("Launching expedition");
                 var cx = known_friends[church.id].x, cy = known_friends[church.id].y;
-                throttle[code] = steps + 10 + Math.sqrt(utils.dist(arg, [cx, cy]));
+                throttle[code] = steps + Math.max(10, (steps-100)/5) + Math.sqrt(utils.dist(arg, [cx, cy]));
                 resources_replenished = false;
                 return [
                     null,
@@ -495,7 +453,6 @@ function i_should_do(game, steps, smove, known_stations) {
             return -maxdis;
         });
 
-        game.log("Sending emission from " + chosen_one.id);
         if (chosen_one.id === game.me.id) {
             var maxdis = 0;
             known_stations.forEach(g => {
@@ -546,7 +503,6 @@ function get_backup_message(game, steps, enemies, range=64) {
     if (closest) {
         if (utils.dist([closest.x, closest.y], [game.me.x, game.me.y]) <= 64) {
             last_call_on = steps;
-            game.log("requesting assistance");
             // yes. Yes we do.
             return [new Message("attack", closest.x, closest.y), range];
         }
@@ -567,24 +523,19 @@ function defense(game, steps, enemies, predators, prey, friends) {
         } else mydist = Math.abs(game.map.length/2 - game.me.y);
 
         var closest_castle = true;
-        game.log("checking if closest...");
         var my_castles = filter_known_friends((i, u, x, y) => u === SPECS.CASTLE);
-        game.log(my_castles);
         my_castles.forEach(c => {
             if (c.id === game.me.id) return;
             var dist;
             if (game.symmetry === utils.VERTICAL) {
                 dist = Math.abs(game.map[0].length/2 - c.x);
             } else dist = Math.abs(game.map.length/2 - c.y);
-            game.log(dist);
             if (dist < mydist) {
                 closest_castle = false;
             }
         });
-        game.log(mydist);
 
         if (closest_castle && mydist < 14) {
-            game.log("precaution build");
             precaution_build = true; 
         }
     }
@@ -606,7 +557,6 @@ function defense(game, steps, enemies, predators, prey, friends) {
     castle_church_ratio = Math.min(0.9, castle_church_ratio);
     castle_church_ratio = Math.max(0.3, castle_church_ratio);
 
-    game.log("castle_church_ratio: " + castle_church_ratio);
 
     var total_castle_reo = 0;
     var my_reo = 0;
@@ -639,18 +589,14 @@ function defense(game, steps, enemies, predators, prey, friends) {
         if (c.id === game.me.id) my_contrib += contrib;
         total_contrib += contrib;
     });
-    game.log(my_contrib + " " + total_contrib + " " + total_castle_target_reo);
 
     var my_target_reo = my_contrib / total_contrib * total_castle_target_reo;
-    game.log("Hoping to reach " + my_target_reo + " reinforcements. We have " + my_reo);
-    game.log("kt k ft f " + game.karbonite_target + " " + game.karbonite + " " + game.fuel_target + " " + game.fuel);
 
     // Now analyse enemies
     var enemy_threat = 0;
     var seen = {};
     enemies.forEach(r => {
         seen[r.id] = true;
-        game.log("seen " + r.id);
         if (warrior.is_warrior(r.unit)) enemy_threat += 3;
         else enemy_threat += 1;
     });
@@ -658,7 +604,6 @@ function defense(game, steps, enemies, predators, prey, friends) {
     var phantom_threat = 0;
     enemy_warrior_sightings.forEach(e => { // Helps to not react too late
         var [_, x, y] = e; 
-        game.log(e);
         if (utils.dist([x, y], [game.me.x, game.me.y]) < 250) {
             phantom_threat += 0.2;
         }
@@ -673,7 +618,6 @@ function defense(game, steps, enemies, predators, prey, friends) {
     if (my_target_reo > my_reo) {
         
         if (predators.length || my_reo < enemy_threat) should_build = true;
-        game.log("predator: " + predators.length + " enemy threat " + enemy_threat + " my reo " + my_reo);
         if (game.karbonite >= 75) {
             var bottleneck_resource = Math.min(game.karbonite / game.karbonite_target, game.fuel / game.fuel_target);
             if (my_reo / my_target_reo < bottleneck_resource) should_build = true;
@@ -688,7 +632,6 @@ function defense(game, steps, enemies, predators, prey, friends) {
     // Sometimes, in the early game we run out of karbonite and are outmatched. Call for dire assistance
     if (my_reo*2 < enemy_threat && game.karbonite < 70) {
         if (last_distress_on + DISTRESS_DELAY < steps) {
-            game.log(steps + " Calling for dire assistance");
             var closest = utils.argmax(enemies, f => {
                 if (!warrior.is_warrior(f.unit)) return null;
                 return -utils.dist([game.me.x, game.me.y], [f.x, f.y]);
@@ -722,7 +665,7 @@ function defense(game, steps, enemies, predators, prey, friends) {
         });
 
         if (preacher_rush) savior = SPECS.PREACHER;
-        else if (steps >= macro.MIDGAME_STEPS && num_built % 4 !== 0) { // Up the crusader ratio in the endgame.
+        else if (steps >= macro.MIDGAME_STEPS && num_built % 4 !== 0 && enemies.length === 0) { // Up the crusader ratio in the endgame.
             savior = SPECS.CRUSADER;
         }
 
@@ -765,7 +708,6 @@ function defense(game, steps, enemies, predators, prey, friends) {
 
     // didn't build. Try just attacking
     if (prey.length) {
-        game.log("default to attacking");
         var tohit = utils.argmax(prey, r => utils.threat_level(game, r));
         return [game.attack(tohit.x-game.me.x, tohit.y-game.me.y), msg];
     }

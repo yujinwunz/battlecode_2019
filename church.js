@@ -21,11 +21,9 @@ export function listen_orders(game) {
         if (r.signal_radius === utils.dist([r.x, r.y], [game.me.x, game.me.y])) {
             // Only accept orders from castle.
             if (msg.type === "start_expedition") {
-                game.log("Heard expedition message");
                 if (utils.maybe_from_our_castle(game, [r.x, r.y])) { 
-                    game.log("ok");
                     orders.push(msg);            
-                } else game.log("But I thought it's from a different castle");
+                }
             } else if (msg.type === "start_assult") {
                 if (utils.maybe_from_our_castle(game, [r.x, r.y])) {
                     orders.push(msg);
@@ -117,7 +115,6 @@ function defense(game, steps, enemies, friends) {
         });
 
         target_escorts = Math.max(enemy_strength, target_escorts);
-        game.log("enemy_strength: " + enemy_strength);
     }
 
     var should_build = false;
@@ -142,9 +139,6 @@ function defense(game, steps, enemies, friends) {
 
         if (steps % dist === game.me.id % dist) should_build = true;
     }
-
-    game.log("target_escorts vs me: " + target_escorts + " " + escorts);
-    game.log("kt k ft f " + game.karbonite_target + " " + game.karbonite + " " + game.fuel_target + " " + game.fuel);
 
     if (should_build) {
         var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {

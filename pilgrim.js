@@ -76,17 +76,11 @@ function expand_church(game, steps, friends) {
         if (benefit < 2) return null;
         // Janky heuristics here
         if (game.fuel*(benefit/1.5)-100 >= game.fuel_target && game.karbonite*(benefit/1.5)-50 >= game.karbonite_target) {
-            game.log("Building auxilary church at " + bx + " " + by + " with benefit " + benefit);
-            
             if (utils.robots_collide(friends, [bx, by])) {
-                game.log("cancelled");
                 return null;
             }
+            game.log("Building auxilary church at " + bx + " " + by + " with benefit " + benefit);
             return game.buildUnit(SPECS.CHURCH, bx-game.me.x, by-game.me.y);
-        } else {
-            game.log("Would build but our resources are under budget kt k ft f " + 
-                game.karbonite_target + " " + game.karbonite + " " + game.fuel_target + 
-                " " + game.fuel + " benefit " + benefit);
         }
     }
     return null;
@@ -153,7 +147,6 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
         }
 
         if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
-            game.log("running away");
             return [game.move(nx-game.me.x, ny-game.me.y), null];
         }
     }
@@ -271,7 +264,6 @@ export function expedition(game, steps, matrix, target, trail, home, home_trail,
 
     var newstate;
     if (otherhome) {
-        game.log("someone else built it");
         newstate = MINING;
     }
 

@@ -15,8 +15,6 @@ function reflex(game, steps, matrix, enemies, predators, prey, friends) {
 }
 
 export function attack(game, steps, matrix, enemies, predators, prey, friends, target, target_trail) {
-    game.log("attack turn");
-
     // attack anything in sight first
     if (prey.length) {
         var tohit = utils.argmax(prey, f => utils.threat_level(game, f));
@@ -50,10 +48,8 @@ export function attack(game, steps, matrix, enemies, predators, prey, friends, t
 
     // If we've reached the target then we must be all clear by now, so this path is
     // impossible. So... we must be pretty far.
-    game.log("voyaging");
     var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, friends.concat({x:target[0],y:target[1]})); // don't step on the target 
     if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
-        game.log("Moving to " + nx + " " + ny + " im at " + game.me.x + " " + game.me.y);
         return [game.move(nx - game.me.x, ny - game.me.y), null];
     }
 

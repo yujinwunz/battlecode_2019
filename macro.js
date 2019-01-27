@@ -48,13 +48,12 @@ export function is_endgame(game, steps, my_castles, opp_castles, known_friends) 
         else if (r.unit === SPECS.CHURCH) num_builders++;
     }
 
-    var max_crusaders_by_karb = game.karbonite / SPECS.UNITS[SPECS.CRUSADER].CONSTRUCTION_KARBONITE * 1.2; // Add a bit more to not be stingy
+    var max_crusaders_by_karb = game.karbonite / SPECS.UNITS[SPECS.CRUSADER].CONSTRUCTION_KARBONITE * 1.4; // Add a bit more to not be stingy
     var max_crusaders_by_fuel = game.fuel / (SPECS.UNITS[SPECS.CRUSADER].CONSTRUCTION_FUEL + game.map.length/2); // 30 for turtling movement
 
     var max_crusaders = Math.min(max_crusaders_by_karb, max_crusaders_by_fuel);
     
     var max_crusaders_by_time = num_builders * turns_remaining;
-    //game.log("karb, fuel, time, time vs res: " + max_crusaders_by_karb + " " + max_crusaders_by_fuel + " " + max_crusaders_by_time + " " + max_crusaders);
     if (max_crusaders_by_time < max_crusaders) { // 10% buffer just in case of surprise attack or something
         return true;
     }

@@ -56,11 +56,9 @@ function report_enemies(game, steps) {
     reports_in_a_row++;
     if (reports_in_a_row == 4) {
         reports_in_a_row = -1;
-        game.log("taking a break");
         return false;
     }
     if (reports_in_a_row == 0) {
-        game.log("taking another break");
         return false;
     }
     // find an enemy that was reported last.
@@ -91,10 +89,8 @@ function report_enemies(game, steps) {
         dy = Math.floor(dy/3);
 
         if (warrior.is_warrior(to_report.unit)) {
-            game.log("reporting warrior at " + to_report.x + " " + to_report.y);
             game.castleTalk(128 + 64 + dx*8 + dy);
         } else {
-            game.log("reporting civilian");
             game.castleTalk(128 + dx*8 + dy);
         }
         return true;
@@ -205,10 +201,8 @@ class MyRobot extends BCAbstractRobot {
             if ("signal" in f && f.signal > 0 && "x" in f) {
                 var msg = decode(f.signal, f, this.me.team);
                 if (msg.type === "emission") {
-                    this.log("got new emission request " + msg.karbonite + " " + msg.fuel);
                     this.fuel_target = macro.FUEL_LEVELS[msg.fuel];
                     this.karbonite_target = macro.KARBONITE_LEVELS[msg.karbonite];
-                    this.log("Targets now at " + this.karbonite_target + " " + this.fuel_target);
                 } else if (msg.type === "void_signature" || msg.type === "void") this.log("bad msg from " + f.id + " " + f.signal);
             }
         });
@@ -242,7 +236,6 @@ class MyRobot extends BCAbstractRobot {
                     if (steps !== 1) return;
                     target = [o.x, o.y];
                     target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, []);
-                    this.log("sending pilgrim to build church. home is now " + o.sender.x + " " + o.sender.y);
                     home = [o.sender.x, o.sender.y];
                     home_trail = nav.build_map(this.map, home, 4, nav.GAITS.SPRINT, []);
                     pilgrim_state = pilgrim.EXPEDITION;
@@ -291,8 +284,6 @@ class MyRobot extends BCAbstractRobot {
                     prophet_state = warrior.ATTACKING;
                 }
                 if (o.type === "castle_distress") {
-                    this.log("castle_distress received");
-                    this.log(o);
                     this.last_castle_distress = steps;
                 }
             });
