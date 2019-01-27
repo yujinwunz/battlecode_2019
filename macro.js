@@ -9,6 +9,8 @@ export const FUEL_LEVELS = [150, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 75
 // Usually fuel is not a limited resource in the very early game, yet karbonite is crucial for the "space race" while defending against
 // surprise rushes.
 export const FUEL_EMBARGO = 10; // After how many turns are we allowed to build pilgrims for fuel? 
+export const MIDGAME_STEPS = 200;
+export const LATEGAME_STEPS = 200;
 
 
 export function emission_params(karbonite, fuel) {

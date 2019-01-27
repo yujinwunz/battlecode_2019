@@ -791,7 +791,7 @@ export function turn(game, steps, enemies, predators, prey, friends) {
 
     // Priority 3. Autopilot farming
     if (!action && !msg) {
-        if (predators.length === 0 || game.karbonite >= 50) {
+        if ((predators.length === 0 && prey.length === 0) || game.karbonite >= 70) {
             var [action, msg] = farm.turn(game, steps, enemies, friends);
         }
     }

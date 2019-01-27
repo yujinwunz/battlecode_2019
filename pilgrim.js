@@ -124,6 +124,7 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
 
     var should_drop_off = false;
 
+    var churches = friends.filter(f => f.unit === SPECS.CHURCH || f.unit === SPECS.CASTLE);
     if (predators.length) {
 
         var loc = utils.argmax(churches, f=> {
@@ -133,7 +134,7 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
 
         if (resources_third && loc) {
             // drop off the payload before trying to run away
-            return [game.give(loc[0] - game.me.x, loc[1] - game.me.y)];
+            return [game.give(loc.x - game.me.x, loc.y - game.me.y)];
         } else {
             // if directly in the line of fire, gtfo.
             var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
@@ -164,7 +165,6 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
         should_drop_off = true;
     }
 
-    var churches = friends.filter(f => f.unit === SPECS.CHURCH || f.unit === SPECS.CASTLE);
     if (should_drop_off) {
         // go home and dump
         // actually, go to any neighbour church and dump

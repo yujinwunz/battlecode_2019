@@ -324,6 +324,25 @@ export function forward(game, loc, amount=1) {
     }
 }
 
+// dloc:
+//  1
+//  0     X
+// -1    
+// y   -1 0  1
+//     x
+//
+// On my half: towards enemy
+// On enemy half: towards center depending on left/right side.
+export function towards(game, loc, dloc) {
+    if (game.symmetry === VERTICAL) {
+        if (game.me.team === 0) return [loc[0] + dloc[1], loc[1] + dloc[0]];
+        else return [loc[0] - dloc[1], loc[1] - dloc[0]];
+    } else {
+        if (game.me.team === 0) return [loc[0] + dloc[0], loc[1] - dloc[1]];
+        else return [loc[0] - dloc[0], loc[1] + dloc[1]];
+    }
+}
+
 export function in_distress(game, steps) {
     return game.last_castle_distress + 20 > steps;
 }

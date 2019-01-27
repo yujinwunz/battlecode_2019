@@ -1,6 +1,7 @@
 import {BCAbstractRobot, SPECS} from 'battlecode';
 import * as utils from 'utils.js';
 import * as nav from 'nav.js';
+import * as macro from 'macro.js';
 
 export const TURTLE_MIN_DIST = 9;
 export const TURTLE_SHIELD_DIST = 6;
@@ -12,9 +13,58 @@ var blocked = {};
 var nearby_stations = {};
 var first_location = [null, null];
 
+function get_blocked(game, loc) {
+    return (!game.map[loc[1]] || !game.map[loc[1]][loc[0]] || (loc[0]*64+loc[1]) in blocked);
+}
+
 // Can we STAY here? less computationally heavy
-function is_turtle(game, loc, friends) {
-    if ((loc[0] + loc[1]) % 2) return false;;
+function is_turtle(game, steps, loc, friends) {
+        // at opening. Expanding lattice.
+        if ((loc[0] + loc[1]) % 2) return false;
+
+    /*
+        if ((loc[0] + loc[1]) % 2) {
+            game.log("midgame lattice considering " + loc[0] + " " + loc[1]);
+
+            //iif (loc[0] === 0 || loc[0] === game.map[0].length-1) return true;
+            //if (loc[1] === 0 || loc[1] === game.map.length-1) return true;
+
+            // At lategame. Form crystals with my automata.
+            // Assume we are going up. If we have this:
+            //
+            //     * * * *       * * *
+            //* * * * * * * * * * * * * * *
+            // * * * * * * * * * * * * * * *
+            //* * * * * * * * * * * * * * *
+            // 
+            // We want this:
+            //
+            //     *******       *****
+            //***** * * * *****************
+            // * * * * * * *** ***** * * * *
+            //* * * * * * * * * * * * * * *
+            //
+            //SO in addition to normal lattice, we need
+
+            var tl = get_blocked(utils.forward(game, loc, [-1, 1]));
+            var tr = get_blocked(utils.forward(game, loc, [1, 1]));
+            var t = get_blocked(utils.forward(game, loc, [0, 1]));
+            var l = get_blocked(utils.forward(game, loc, [-1, 0]));
+            var ll = get_blocked(utils.forward(game, loc, [-2, 0]));
+            var r = get_blocked(utils.forward(game, loc, [1, 0]));
+            var rr = get_blocked(utils.forward(game, loc, [2, 0]));
+
+            game.log(tl + " " + t + " " + tr + "; " + ll + " " + l + " me " + r + " " + rr);
+
+            if (!tl && !tr && !t) {
+                // ok
+            } else if (!tl + !tr + !t == 2) {
+                if (!(!l && !ll) && !(!r && !rr)) return false; 
+            } else if (tl && tr && t) {
+                if (l || r) return false;
+            }
+        }
+    }*/
 
     // Move away from the castle.
     if (game.karbonite_map[loc[1]][loc[0]]) return false;
@@ -45,7 +95,7 @@ function can_turtle(game, loc, enemies, friends) {
     if ((loc[0] + loc[1]) % 2) return false; // the main one
 
     if (!game.map[loc[1]][loc[0]]) return false;
-    if (blocked[loc[0]*64+loc[1]]) return false;
+    if ((loc[0]*64+loc[1]) in blocked) return false;
 
     // Don't stand on resources or too close to interfere with pilgrims
     if (game.karbonite_map[loc[1]][loc[0]]) return false;
@@ -97,9 +147,10 @@ var dream_trail = null;
 var turtle_trail = {};
 
 export function turn(game, steps, matrix, enemies, friends) {
+    var start = new Date().getTime();
     if (steps === 1) first_location = [game.me.x, game.me.y];
     prepare_turtle(game, [game.me.x, game.me.y], enemies, friends);
-    if (is_turtle(game, [game.me.x, game.me.y], friends)) return [null, null];
+    if (is_turtle(game, steps, [game.me.x, game.me.y], friends)) return [null, null];
 
     // Not turtle so find turtle
     var loc = closest_visible_turtle(game, steps, enemies, friends);
@@ -129,7 +180,9 @@ export function turn(game, steps, matrix, enemies, friends) {
 
     var [x, y] = nav.path_step(trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, enemies.concat(friends));
     if (x !== null && (x !== game.me.x || y !== game.me.y)) {
+        game.log(steps + " turtling turn took " + (new Date().getTime()-start));
         return [game.move(x - game.me.x, y - game.me.y), null];
     }
+    game.log(steps + " turtling turn took " + (new Date().getTime()-start));
     return [null, null];
 }
