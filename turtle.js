@@ -3,8 +3,8 @@ import * as utils from 'utils.js';
 import * as nav from 'nav.js';
 
 export const TURTLE_MIN_DIST = 9;
-export const TURTLE_SHIELD_DIST = 5;
-export const REFRAIN_BUFFER = 4;
+export const TURTLE_SHIELD_DIST = 6;
+export const REFRAIN_BUFFER = 2;
 
 var blocked = {};
 // Stations don't change so we'll remember and persist these even when they go out

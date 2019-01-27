@@ -161,8 +161,14 @@ export function on_civilian_sighting(game, steps, r, dx, dy) {
 const MEMORY = 10;
 
 function prune_known_enemies(game, steps) {
+    game.log("pruning");
     while (enemy_civilian_sightings.length > 0 && enemy_civilian_sightings[0][0] + MEMORY < steps) enemy_civilian_sightings.shift(0); 
-    while (enemy_warrior_sightings.length > 0 && enemy_warrior_sightings[0][0] + MEMORY < steps) enemy_warrior_sightings.shift(0); 
+    while (enemy_warrior_sightings.length > 0 && enemy_warrior_sightings[0][0] + MEMORY < steps) {
+        game.log("forgetting warrior sighting " + enemy_warrior_sightings.length);
+        game.log(enemy_warrior_sightings[0]);
+        enemy_warrior_sightings.shift(0); 
+        game.log("now has " + enemy_warrior_sightings.length);
+    }
 }
 
 var church_locs = null;
@@ -188,6 +194,8 @@ function getcode(smove) {
 }
 
 function get_unused_groups(game, steps) {
+    game.log("getting unused groups");
+    game.log(church_locs);
     var known_churches = filter_known_friends((i, u, x, y) => 
         u === SPECS.CASTLE || u === SPECS.CHURCH
     );
@@ -653,7 +661,7 @@ function defense(game, steps, enemies, predators, prey, friends) {
         }
     });
 
-    phantom_threat = Math.min(phantom_threat, 10);
+    phantom_threat = Math.min(phantom_threat, 5);
     enemy_threat += phantom_threat;
 
     my_target_reo = Math.max(my_target_reo, enemy_threat);

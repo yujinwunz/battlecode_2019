@@ -123,8 +123,8 @@ export function get_church_locations(game) {
         if (maxc - minc <= 8) {
             ng.forEach(a => g.push(a));
         } else {
-            groups.push(ng);
         }*/
+        groups.push(ng);
     }
 
     var churches = [];

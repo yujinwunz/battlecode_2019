@@ -73,6 +73,7 @@ function expand_church(game, steps, friends) {
     if (bx !== null) {
         var benefit = num_dangling_resources(game, steps, [bx, by], churches);
         
+        if (benefit < 2) return null;
         // Janky heuristics here
         if (game.fuel*(benefit/1.5)-100 >= game.fuel_target && game.karbonite*(benefit/1.5)-50 >= game.karbonite_target) {
             game.log("Building auxilary church at " + bx + " " + by + " with benefit " + benefit);
@@ -105,27 +106,6 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
         game.log(resource_group);
     }
 
-    if (predators.length) {
-        // if directly in the line of fire, gtfo.
-        var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
-            if (game.map[y][x] === false) return null;
-            if (utils.robots_collide(friends.concat(enemies), [x, y])) return null;
-
-            var danger = 0;
-            enemies.forEach(e => {
-                if (warrior.is_warrior(e.unit)) {
-                    if (utils.in_fire_range_full(e.unit, utils.dist([e.x, e.y], [x, y]))) danger++;
-                }
-            });
-
-            return -danger;
-        });
-
-        if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
-            game.log("running away");
-            return [game.move(nx-game.me.x, ny-game.me.y), null];
-        }
-    }
 
     // Observation
     var has_neighboring_attacker = false;
@@ -143,6 +123,39 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
                           game.me.karbonite*3 >= SPECS.UNITS[SPECS.PILGRIM].KARBONITE_CAPACITY);
 
     var should_drop_off = false;
+
+    if (predators.length) {
+
+        var loc = utils.argmax(churches, f=> {
+            if (utils.adjacent([f.x, f.y], [game.me.x, game.me.y])) return 1;
+            return null;
+        });
+
+        if (resources_third && loc) {
+            // drop off the payload before trying to run away
+            return [game.give(loc[0] - game.me.x, loc[1] - game.me.y)];
+        } else {
+            // if directly in the line of fire, gtfo.
+            var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
+                if (game.map[y][x] === false) return null;
+                if (utils.robots_collide(friends.concat(enemies), [x, y])) return null;
+
+                var danger = 0;
+                enemies.forEach(e => {
+                    if (warrior.is_warrior(e.unit)) {
+                        if (utils.in_fire_range_full(e.unit, utils.dist([e.x, e.y], [x, y]))) danger++;
+                    }
+                });
+
+                return -danger;
+            });
+        }
+
+        if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
+            game.log("running away");
+            return [game.move(nx-game.me.x, ny-game.me.y), null];
+        }
+    }
 
     // Execution
     if (has_neighboring_attacker) {
@@ -198,7 +211,9 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
             var target = utils.argmax(resource_group, f => {
                 if (utils.robots_collide(friends, f) && (f[0] !== game.me.x || f[1] !== game.me.y)) return null;
                 var dist = utils.dist(f, [game.me.x, game.me.y]);
-                return -dist;
+                if (game.karbonite_map[f[1]][f[0]])
+                    return 1000-dist;
+                else return -dist;
             });
 
             if (target === null) {
