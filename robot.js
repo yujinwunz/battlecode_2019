@@ -226,7 +226,7 @@ class MyRobot extends BCAbstractRobot {
             orders.forEach(o => {
                 if (o.type === "castle_distress") this.last_castle_distress = steps;
             });
-            var [action, msg] =  church.turn(this, steps, enemies, friends, orders);
+            var [action, msg] =  church.turn(this, steps, enemies, predators, friends, orders);
         } else if (this.me.unit === SPECS.PILGRIM) {
             if (steps === 1) {
                 // find nearest castle/church

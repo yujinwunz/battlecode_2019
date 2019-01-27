@@ -91,7 +91,18 @@ function defense(game, steps, enemies, friends) {
 
     var escorts = 0;
     friends.forEach(r => {
-        if (warrior.is_warrior(r.unit)) escorts += 1;
+        // Only things in front are escorts, unless we are in enemy zone in which everything is an escort
+        // This avoids mistaking units from neighbours as helpful to us since they won't come to our defense.
+        if (warrior.is_warrior(r.unit)) {
+            if (utils.on_our_side(game, [game.me.x, game.me.y])) {
+                // Only in enemy zones
+                var center = utils.forward(game, [game.me.x, game.me.y], 7);
+                if (utils.dist(center, [r.x, r.y]) <= 64) escorts++;
+            } else {
+                // Everywhere close
+                if (utils.dist([r.x, r.y], [game.me.x, game.me.y]) <= 64) escorts++;
+            }
+        }
     });
     max_escorts = Math.max(escorts, max_escorts);
     target_escorts = max_escorts;
@@ -152,7 +163,7 @@ function defense(game, steps, enemies, friends) {
     return [null, msg];
 }
 
-export function turn(game, steps, enemies, friends, orders) {
+export function turn(game, steps, enemies, predators, friends, orders) {
     // Observe
 
     // Execute
@@ -184,6 +195,10 @@ export function turn(game, steps, enemies, friends, orders) {
     }
     
     // Priority 3: Autopilot resource management
-    if (!action && !msg) var [action, msg] = farm.turn(game, steps, enemies, friends);
+    if (!action && !msg) {
+        if (predators.length === 0 || game.karbonite >= 50) { 
+            var [action, msg] = farm.turn(game, steps, enemies, friends);
+        }
+    }
     return [action, msg];
 }

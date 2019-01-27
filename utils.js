@@ -303,17 +303,18 @@ export function adjacent(a, b) {
     return d > 0 && d <= 2;
 }
 
-export function on_our_side(game, loc) {
+export function on_our_side(game, loc, rloc=null) {
+    if (rloc === null) rloc = [game.map[0].length/2, game.map.length/2];
     if (game.symmetry === VERTICAL) {
-        if (game.me.team === 0) return loc[0] <= game.map[0].length/2;
-        else return loc[0] > game.map[0].length/2;
+        if (game.me.team === 0) return loc[0] <= rloc[0];
+        else return loc[0] >= rloc[0];
     } else {
-        if (game.me.team === 0) return loc[1] <= game.map.length/2;
-        else return loc[1] > game.map.length/2;
+        if (game.me.team === 0) return loc[1] <= rloc[1];
+        else return loc[1] >= rloc[1];
     }
 }
 
-export function step_forward(game, loc, amount=1) {
+export function forward(game, loc, amount=1) {
     if (game.symmetry === VERTICAL) {
         if (game.me.team === 0) return [loc[0]+amount, loc[1]];
         else return [loc[0]-amount, loc[1]];

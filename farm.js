@@ -28,9 +28,9 @@ export function dfs(map, k_map, f_map, loc, seen, res, cols=null, rows=null, dis
     }
 }
 
-export function get_best_church_location(map, group) {
-    var cols = map[0].length;
-    var rows = map.length;
+export function get_best_church_location(game, group) {
+    var cols = game.map[0].length;
+    var rows = game.map.length;
 
     var minx = (1<<30), maxx = 0, miny = (1<<30), maxy = 0;
     for (var i = 0; i < group.length; i++) {
@@ -45,18 +45,20 @@ export function get_best_church_location(map, group) {
     var bestloc = [null, null];
     for (var x = Math.max(0, minx-2); x <= Math.min(cols-1, maxx+2); x++) {
         for (var y = Math.max(0, miny-2); y <= Math.min(rows-1, maxy+2); y++) {
-            if (!map[y][x]) continue;
+            if (!game.map[y][x]) continue;
 
             var cost = 0;
             for (var i = 0; i < group.length; i++) {
                 var [gx, gy] = group[i];
+                var kp = 1;
+                if (game.karbonite_map[gy][gx]) kp = 1.5;
                 var dist = (x-gx)*(x-gx) + (y-gy)*(y-gy);
                 if (dist === 0) cost += 1000000; // not allowed to build church on resource itself
-                else if (dist < 3) cost += 0;
-                else if (dist <= 4) cost += 11;
-                else if (dist <= 9) cost += 14;
-                else if (dist <= 25) cost += 28;
-                else cost += 200;
+                else if (dist < 3) cost += 0*kp;
+                else if (dist <= 4) cost += 11*kp;
+                else if (dist <= 9) cost += 14*kp;
+                else if (dist <= 25) cost += 28*kp;
+                else cost += 200*kp;
             }
             if (cost < bestcost) {
                 bestcost = cost;
@@ -68,7 +70,8 @@ export function get_best_church_location(map, group) {
     return bestloc;
 }
 
-export function get_church_locations(map, karbonite_map, fuel_map) {
+export function get_church_locations(game) {
+    var map = game.map, karbonite_map = game.karbonite_map, fuel_map = game.fuel_map;
     var symmetry = utils.symmetry(map);
 
     var cols = map[0].length;
@@ -131,7 +134,7 @@ export function get_church_locations(map, karbonite_map, fuel_map) {
         var g = groups[i];
         // don't go if it's next to an existing castle
 
-        churches.push(get_best_church_location(map, g));
+        churches.push(get_best_church_location(game, g));
     }
 
     return [churches, groups];

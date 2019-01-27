@@ -504,7 +504,7 @@ function i_should_do(game, steps, smove, known_stations) {
 }
 
 function init(game) {
-    var [_c, _g] = farm.get_church_locations(game.map, game.karbonite_map, game.fuel_map);
+    var [_c, _g] = farm.get_church_locations(game);
     church_locs = _c;
     group_locs = _g;
     symmetry = utils.symmetry(game.map);
@@ -783,7 +783,9 @@ export function turn(game, steps, enemies, predators, prey, friends) {
 
     // Priority 3. Autopilot farming
     if (!action && !msg) {
-        var [action, msg] = farm.turn(game, steps, enemies, friends);
+        if (predators.length === 0 || game.karbonite >= 50) {
+            var [action, msg] = farm.turn(game, steps, enemies, friends);
+        }
     }
 
     // Priority 4. Passive turtling.

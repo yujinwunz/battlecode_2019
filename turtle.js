@@ -3,11 +3,14 @@ import * as utils from 'utils.js';
 import * as nav from 'nav.js';
 
 export const TURTLE_MIN_DIST = 9;
+export const TURTLE_SHIELD_DIST = 5;
+export const REFRAIN_BUFFER = 4;
 
 var blocked = {};
 // Stations don't change so we'll remember and persist these even when they go out
 // of view - some edge cases are like that.
 var nearby_stations = {};
+var first_location = [null, null];
 
 // Can we STAY here? less computationally heavy
 function is_turtle(game, loc, friends) {
@@ -67,9 +70,23 @@ function can_turtle(game, loc, enemies, friends) {
     return true;
 }
 
+// We want a forward facing turtle.
+function turtlecost(game, steps, loc, enemies, friends) {
+    var floc = utils.forward(game, first_location, TURTLE_SHIELD_DIST);
+    if (utils.on_our_side(game, utils.forward(game, loc, -REFRAIN_BUFFER))) {
+        // If we started in our territory, 90% of the time it's better to form a wall slightly in front of you
+        if (game.symmetry === utils.VERTICAL) return Math.abs(floc[0] - loc[0]);
+        else return Math.abs(floc[1] - loc[1]);
+    } else if (utils.on_our_side(game, loc, floc)) {
+        // If we started on enemy territory, we need to expand in all directions
+        return 0;
+    }
+    return 0;
+}
+
 function closest_visible_turtle(game, steps, enemies, friends) {
     var loc = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].VISION_RADIUS, (x, y) => {
-        if (can_turtle(game, [x, y], enemies, friends)) return -utils.dist([x, y], [game.me.x, game.me.y]);
+        if (can_turtle(game, [x, y], enemies, friends)) return -Math.sqrt(utils.dist([x, y], [game.me.x, game.me.y])) - turtlecost(game, steps, [x, y], enemies, friends);
         else return null;
     });
     return loc;
@@ -80,6 +97,7 @@ var dream_trail = null;
 var turtle_trail = {};
 
 export function turn(game, steps, matrix, enemies, friends) {
+    if (steps === 1) first_location = [game.me.x, game.me.y];
     prepare_turtle(game, [game.me.x, game.me.y], enemies, friends);
     if (is_turtle(game, [game.me.x, game.me.y], friends)) return [null, null];
 
