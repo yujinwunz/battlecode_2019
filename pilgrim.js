@@ -323,9 +323,7 @@ export function expedition(game, steps, matrix, target, trail, home, home_trail,
             // Do not walk into enemy fire. We are actually good as scouts.
             var danger = 0;
             enemies.forEach(e => {
-                if (warrior.is_warrior(e.unit)) {
-                    if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [x, y]))) danger++;
-                }
+                if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [x, y]))) danger++;
             });
 
             if (danger) return -danger*1000000;

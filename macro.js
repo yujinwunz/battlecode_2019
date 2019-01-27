@@ -9,8 +9,8 @@ export const FUEL_LEVELS = [150, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 75
 // Usually fuel is not a limited resource in the very early game, yet karbonite is crucial for the "space race" while defending against
 // surprise rushes.
 export const FUEL_EMBARGO = 10; // After how many turns are we allowed to build pilgrims for fuel? 
-export const MIDGAME_STEPS = 200;
-export const LATEGAME_STEPS = 200;
+export const MIDGAME_STEPS = 400;
+export const LATEGAME_STEPS = 600;
 
 
 export function emission_params(karbonite, fuel) {
@@ -38,7 +38,7 @@ export function recommend_params(game, steps, my_castles, opp_castles, karbonite
 }
 
 
-// Should we expolode in a firework display of crusaders?
+// Should we expolode in a firework display of crusaders yet?
 export function is_endgame(game, steps, my_castles, opp_castles, known_friends) {
     var turns_remaining = 1000 - steps;
     var num_builders = 0;
@@ -48,14 +48,14 @@ export function is_endgame(game, steps, my_castles, opp_castles, known_friends) 
         else if (r.unit === SPECS.CHURCH) num_builders++;
     }
 
-    var max_crusaders_by_karb = game.karbonite / SPECS.UNITS[SPECS.CRUSADER].CONSTRUCTION_KARBONITE;
+    var max_crusaders_by_karb = game.karbonite / SPECS.UNITS[SPECS.CRUSADER].CONSTRUCTION_KARBONITE * 1.2; // Add a bit more to not be stingy
     var max_crusaders_by_fuel = game.fuel / (SPECS.UNITS[SPECS.CRUSADER].CONSTRUCTION_FUEL + game.map.length/2); // 30 for turtling movement
 
     var max_crusaders = Math.min(max_crusaders_by_karb, max_crusaders_by_fuel);
     
     var max_crusaders_by_time = num_builders * turns_remaining;
     //game.log("karb, fuel, time, time vs res: " + max_crusaders_by_karb + " " + max_crusaders_by_fuel + " " + max_crusaders_by_time + " " + max_crusaders);
-    if (max_crusaders_by_time *1.1 < max_crusaders) { // 10% buffer just in case of surprise attack or something
+    if (max_crusaders_by_time < max_crusaders) { // 10% buffer just in case of surprise attack or something
         return true;
     }
     return false;

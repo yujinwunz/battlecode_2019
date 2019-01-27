@@ -123,6 +123,10 @@ function can_turtle(game, loc, enemies, friends) {
 // We want a forward facing turtle.
 function turtlecost(game, steps, loc, enemies, friends) {
     var floc = utils.forward(game, first_location, TURTLE_SHIELD_DIST);
+    if (game.me.unit === SPECS.CRUSADER) {
+        // Crusaders hide backwards and are useless to the overall turtle strategy except unit health.
+        floc = utils.forward(game, first_location, -1.5*TURTLE_SHIELD_DIST);
+    }
     if (utils.on_our_side(game, utils.forward(game, loc, -REFRAIN_BUFFER))) {
         // If we started in our territory, 90% of the time it's better to form a wall slightly in front of you
         if (game.symmetry === utils.VERTICAL) return Math.abs(floc[0] - loc[0]);

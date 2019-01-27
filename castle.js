@@ -402,7 +402,6 @@ function canonical_strategic_move(game, steps, known_stations) {
     if (to_build_list.length) to_build = to_build_list[0];
 
     if (to_build && !utils.in_distress(game, steps) && resources_replenished) {
-        resources_replenished = false;
         last_num_stations = known_stations.length;
         game.log(steps + " Considering building at " + to_build[0] + " " + to_build[1]);
         game.log("my choices were:");
@@ -466,6 +465,7 @@ function i_should_do(game, steps, smove, known_stations) {
                 game.log("Launching expedition");
                 var cx = known_friends[church.id].x, cy = known_friends[church.id].y;
                 throttle[code] = steps + 10 + Math.sqrt(utils.dist(arg, [cx, cy]));
+                resources_replenished = false;
                 return [
                     null,
                     [new Message("start_expedition", arg[0], arg[1]), 
@@ -555,6 +555,7 @@ function get_backup_message(game, steps, enemies, range=64) {
 }
 
 var last_savior_loc = [null, null];
+var num_built = 0;
 
 function defense(game, steps, enemies, predators, prey, friends) {
     var precaution_build = false;
@@ -721,6 +722,9 @@ function defense(game, steps, enemies, predators, prey, friends) {
         });
 
         if (preacher_rush) savior = SPECS.PREACHER;
+        else if (steps >= macro.MIDGAME_STEPS && num_built % 4 !== 0) { // Up the crusader ratio in the endgame.
+            savior = SPECS.CRUSADER;
+        }
 
         var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
             if (game.map[y][x] === false) return null;
@@ -753,6 +757,7 @@ function defense(game, steps, enemies, predators, prey, friends) {
             if (game.karbonite >= SPECS.UNITS[savior].CONSTRUCTION_KARBONITE &&
                 game.fuel >= SPECS.UNITS[savior].CONSTRUCTION_FUEL) {
                 if (!msg) msg = get_backup_message(game, steps, enemies, 2);
+                num_built++;
                 return [game.buildUnit(savior, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
             }
         }
