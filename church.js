@@ -125,8 +125,8 @@ function defense(game, steps, enemies, friends) {
         if (defense_crisis <= fuel_crisis && defense_crisis <= karb_crisis) 
             should_build = true;
         
-        //            buffer                         allow them to shoot 
-        if (escorts <= enemy_strength * 1.5 && game.fuel >= 50 + escorts*25) should_build = true;
+        //            emergency                         allow them to shoot 
+        if (escorts <= enemy_strength * 1.5 && game.fuel >= 50 + escorts*75) should_build = true;
     }
 
     if (game.fuel > game.fuel_target && game.karbonite > game.karbonite_target) {
@@ -147,10 +147,20 @@ function defense(game, steps, enemies, friends) {
             if (utils.robots_collide(enemies, [x, y])) return null;
             return Math.random();
         });
+        
+        var closest = (1<<30);
+        var preacher_rush = false;
+        enemies.forEach(e => {
+            var dist = utils.dist([e.x, e.y], [game.me.x, game.me.y]);
+            closest = Math.min(closest, utils.dist([e.x, e.y], [game.me.x, game.me.y]));
+            if (e.unit === SPECS.PREACHER && dist <= 49) preacher_rush = true;
+        });
 
         if (turtle[0] !== null) {
             if (!utils.in_distress(game, steps)) { // castle protection before church protection
-                return [game.buildUnit(SPECS.PROPHET, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+                var type = SPECS.PROPHET;
+                if (closest <= 25 || preacher_rush) type = SPECS.PREACHER;
+                return [game.buildUnit(type, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
             }
         }
     }
