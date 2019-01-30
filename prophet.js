@@ -3,16 +3,62 @@ import * as utils from 'utils.js';
 import * as nav from 'nav.js';
 import * as _turtle from 'turtle.js';
 
+var first_location = [null, null];
+
+function zoom_out(game, steps, enemies, friends) {
+    game.log("zooming out");
+    // we have something inside our eye and we are not backed up. We need to move.
+    var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
+        if (game.map[y][x] === false) return null;
+        if (utils.robots_collide(friends, [x, y])) return null;
+        var attacked = false;
+        enemies.forEach(e => {
+            if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [x, y]))) attacked = true;
+        });
+        if (attacked) return null;
+
+        var mindist = (1<<30);
+        enemies.forEach(e => mindist = Math.min(mindist, utils.dist1([e.x, e.y], [x, y])));
+        return mindist + utils.dist1([x, y], first_location);
+    });
+
+    if (nx !== null && (nx !== game.me.x || ny != game.me.y)) {
+        game.log("moving to " + nx + " " + ny + " " + game.me.x + " " + game.me.y);
+        return [game.move(nx-game.me.x, ny-game.me.y), null];
+    }
+    game.log("no good zooming location");
+    return [null, null];
+}
+
 function reflex(game, steps, matrix, enemies, predators, prey, blindspot, friends) {
-    // Shoot first
-    if (prey.length) {
+    if (first_location[0] === null) first_location = [game.me.x, game.me.y];
+
+    var action = null, msg = null;
+
+    var attacked_by_preacher = false;
+    enemies.forEach(e => {
+        if (e.unit === SPECS.PREACHER && utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [game.me.x, game.me.y]))) {
+            attacked_by_preacher = true;
+        }
+    });
+    if (attacked_by_preacher) {
+        var [action, msg] = zoom_out(game, steps, enemies, friends);
+    }
+
+    // Move outta da way
+    if (blindspot.length) {
+        if (friends.length <= 20) {
+            var [action, msg] = zoom_out(game, steps, enemies, friends);
+        }
+    }
+    // Shoot next
+    if (prey.length && !action && !msg) {
         var target = utils.argmax(prey, r => utils.threat_level(game, r));
-        return [game.attack(target.x - game.me.x, target.y - game.me.y), null];
+        var [action, msg] = [game.attack(target.x - game.me.x, target.y - game.me.y), null];
     }
     
-    // Don't move from blindspot. We are always in lattice.
 
-    return [null, null];
+    return [action, msg];
 }
 
 
@@ -21,47 +67,28 @@ export function protect(game, steps, matrix, enemies, predators, prey, blindspot
 }
 
 export function attack(game, steps, matrix, enemies, predators, prey, blindspot, friends, target, target_trail) {
-    // attack anything in sight first
-    if (prey.length) {
-        var tohit = utils.argmax(prey, f => utils.threat_level(game, f));
-        if (tohit) {
-            return [game.attack(tohit.x-game.me.x, tohit.y-game.me.y), null];
-        }
-    }
+    var action = null, msg = null;
+    var [action, msg] = reflex(game, steps, matrix, enemies, predators, prey, blindspot, friends);
 
-    // Check blind spot if we've reached the target
-    if (utils.dist(target, [game.me.x, game.me.y]) < SPECS.UNITS[game.me.unit].VISION_RADIUS/2) {
-        if (blindspot.length) {
-            // Move away from that
-            var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, 
-                [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, (x, y) => {
-
-                    if (game.map[y][x] === false) return null;
-                    if (utils.robots_collide(friends, [x, y])) return null;
-                    if (utils.robots_collide(enemies, [x, y])) return null;
-                    
-                    var mindist = (1<<30);
-                    blindspot.forEach(f => {
-                        mindist = Math.min(mindist, utils.dist([f.x, f.y], [x, y]));
-                    });
-                    return mindist; // be as far away as any blind spot possible.
-                    // We are attacking and clearing so we don't care if we step into range.
-                    // We also wouldn't be able to tell.
-            });
-            if (nx !== null && (nx !== game.me.x || nx !== game.me.y)) {
-                return [game.move(nx-game.me.x, ny-game.me.y), null];
+    if (!action && !msg) {
+        // Check blind spot always if we've reached the target
+        if (utils.dist(target, [game.me.x, game.me.y]) < SPECS.UNITS[game.me.unit].VISION_RADIUS/2) {
+            if (blindspot.length) {
+                var [action, msg] = zoom_out(game, steps, matrix, enemies, predators, prey, blindspot, friends);
             }
         }
     }
 
-    // If we've reached the target then we must be all clear by now, so this path is
-    // impossible. So... we must be pretty far.
-    var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, friends.concat({x:target[0],y:target[1]})); // don't step on the target 
-    if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
-        return [game.move(nx - game.me.x, ny - game.me.y), null];
+    if (!action && !msg) {
+        // If we've reached the target then we must be all clear by now, so this path is
+        // impossible. So... we must be pretty far.
+        var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], SPECS.UNITS[game.me.unit].SPEED, friends.concat({x:target[0],y:target[1]})); // don't step on the target 
+        if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
+            var [action, msg] = [game.move(nx - game.me.x, ny - game.me.y), null];
+        }
     }
 
-    return [null, null];
+    return [action, msg];
 }
 
 export function turtle(game, steps, matrix, enemies, predators, prey, blindspot, friends) {

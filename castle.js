@@ -641,6 +641,7 @@ function defense(game, steps, enemies, predators, prey, friends) {
                 closest = utils.argmax(enemy_warrior_sightings, f=> {
                     return -utils.dist([f[1], f[2]], [game.me.x, game.me.y]);
                 });
+                closest = [closest[1], closest[2]];
             } else closest = [closest.x, closest.y];
 
             if (closest) {

@@ -76,6 +76,13 @@ export function in_fire_range(type, dist) {
     return true;
 }
 
+export function in_vision_range(type, dist) {
+    if (!SPECS.UNITS[type]) return false;
+    if (!SPECS.UNITS[type].VISION_RADIUS) return false;
+    if (dist > SPECS.UNITS[type].VISION_RADIUS) return false;
+    return true;
+}
+
 export function in_fire_range_full(type, dist) {
     if (!SPECS.UNITS[type]) return false;
     if (!SPECS.UNITS[type].ATTACK_RADIUS) return false;
@@ -341,4 +348,8 @@ export function towards(game, loc, dloc) {
 
 export function in_distress(game, steps) {
     return game.last_castle_distress + 20 > steps;
+}
+
+export function dist1(loc1, loc2) {
+    return Math.abs(loc1[0] - loc2[0]) + Math.abs(loc1[1] - loc2[1]);
 }

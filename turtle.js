@@ -105,18 +105,10 @@ function can_turtle(game, loc, enemies, friends) {
     for (var l in nearby_stations) {
         var r = nearby_stations[l];
         if (utils.dist(loc, [r.x, r.y]) < TURTLE_MIN_DIST) tooclose = true;
-        if (utils.dist(loc, [r.x, r.y]) < 64) protecting = true;
+        if (utils.dist(loc, [r.x, r.y]) < 100) protecting = true;
     }
     if (tooclose) return false;
 
-    // Don't voluntarily go into enemy's fire unless it protects a castle/church.
-    if (!protecting) {
-        var dangerous = false;
-        enemies.forEach(e => {
-            if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], loc))) dangerous = true;
-        });
-        if (dangerous) return false;
-    }
     return true;
 }
 
