@@ -3,6 +3,7 @@ import {Message, decode} from 'message.js';
 import * as utils from 'utils.js';
 import * as nav from 'nav.js';
 import * as warrior from 'warrior.js';
+import * as macro from 'macro.js';
 
 import * as farm from 'farm.js';
 
@@ -167,6 +168,58 @@ function defense(game, steps, enemies, friends) {
     return [null, msg];
 }
 
+// Disregard everything. Go forward.
+function war_turn(game, steps, enemies, predators, friends) {
+    var fuel_needed = 0;
+    friends.forEach(kf => {
+        if ("unit" in kf && "x" in kf && "y" in kf) {
+            if (warrior.is_warrior(kf.unit) && utils.dist([kf.x, kf.y], game.war_target) < macro.WAR_ATTACK_RADIUS) {
+                fuel_needed += 4 * Math.sqrt(utils.dist([kf.x, kf.y], game.war_target));
+            }
+        }
+    });
+
+    // Build if near target, don't build if far away.
+    if (utils.dist(utils.forward(game, [game.me.x, game.me.y], 6), game.war_target) < macro.WAR_BUILD_RADIUS) {
+        var savior = SPECS.PROPHET;
+        var msg = null;
+        if (game.war_mode === 1) {
+            savior = SPECS.PREACHER;
+            msg = [new Message("attack", game.war_target[0], game.war_target[1]), 2];
+        }
+
+        if (game.karbonite >= 30 && game.fuel >= fuel_needed) {
+            game.log("sending a " + savior + " to war");
+            var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+                if (game.map[y][x] === false) return null;
+                if (utils.robots_collide(friends, [x, y])) return null;
+                if (utils.robots_collide(enemies, [x, y])) return null;
+
+                if (utils.on_our_side(game, [game.me.x, game.me.y], [x, y])) {
+                    if (game.me.x !== x && game.me.y !== y) {
+                        return 0;
+                    } else return 1; // send em forwards
+                }
+                return -1;
+            });
+
+            if (turtle[0] !== null) {
+                if (game.karbonite >= SPECS.UNITS[savior].CONSTRUCTION_KARBONITE &&
+                    game.fuel >= SPECS.UNITS[savior].CONSTRUCTION_FUEL) {
+                    return [game.buildUnit(savior, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+                }
+            }
+        } else {
+            game.log("not enough resources for war " + savior + " " + game.karbonite + " " + game.fuel + " " + fuel_needed);
+        }
+    } else {
+        game.log("I'm a bit far, will save resources for the center");
+    }
+
+    return [null, null];
+}
+
+
 export function turn(game, steps, enemies, predators, friends, orders) {
     // Observe
 
@@ -195,7 +248,11 @@ export function turn(game, steps, enemies, predators, friends, orders) {
 
     // Priority 2: Defense
     if (!action && !msg) {
-        var [action, msg] = defense(game, steps, enemies, friends, orders); 
+        if ("war_mode" in game) {
+            var [action, msg] = war_turn(game, steps, enemies, predators, friends);
+        } else {
+            var [action, msg] = defense(game, steps, enemies, friends, orders); 
+        }
     }
     
     // Priority 3: Autopilot resource management

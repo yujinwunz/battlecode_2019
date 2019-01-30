@@ -12,6 +12,10 @@ export const FUEL_EMBARGO = 10; // After how many turns are we allowed to build 
 export const MIDGAME_STEPS = 400;
 export const LATEGAME_STEPS = 600;
 
+export const WAR_ATTACK_RADIUS = 600;
+export const WAR_BUILD_RADIUS = 400;
+export const PILGRIM_WAR_RELEVANT_RADIUS = 130;
+
 
 export function emission_params(karbonite, fuel) {
     var karb = 0, f = 0;

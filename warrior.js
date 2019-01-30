@@ -31,9 +31,10 @@ export function is_warrior(unit) {
 export function done_attacking(game, steps, enemies, friends, target) {
     if (enemies.length) return false;
     if (utils.in_distress(game, steps)) return false;
+    if ("war_mode" in game) return false;
 
     // We should be in the thick of it and clear the area
-    if (utils.dist([game.me.x, game.me.y], target) > SPECS.UNITS[game.me.unit].VISION_RADIUS *2/3) return false;
+    if (utils.dist([game.me.x, game.me.y], target) > SPECS.UNITS[game.me.unit].VISION_RADIUS *1/2) return false;
 
     // no enemies and we're at the target? all OK.
     return true;

@@ -20,7 +20,22 @@ function get_blocked(game, loc) {
 // Can we STAY here? less computationally heavy
 function is_turtle(game, steps, loc, friends) {
         // at opening. Expanding lattice.
-        if ((loc[0] + loc[1]) % 2) return false;
+        if ((loc[0] + loc[1]) % 2 === 1 && loc[1] % 2 === 0) {
+            if (game.me.unit === SPECS.CRUSADER) {
+                // pack much tighter at the back
+                var a = utils.towards(game, [game.me.x, game.me.y], [0, -1]);
+                var b = utils.towards(game, [game.me.x, game.me.y], [0, 1]);
+                var c = utils.towards(game, [game.me.x, game.me.y], [-1, -1]);
+                var d = utils.towards(game, [game.me.x, game.me.y], [-1, 0]);
+                var e = utils.towards(game, [game.me.x, game.me.y], [-1, 1]);
+                
+                if (get_blocked(game, a) && get_blocked(game, b) && get_blocked(game, c) && get_blocked(game, d) && get_blocked(game, e)) {
+                    return true;
+                } else return false;
+            } else {
+                return false;
+            }
+        }
 
     /*
         if ((loc[0] + loc[1]) % 2) {
@@ -92,7 +107,7 @@ function prepare_turtle(game, loc, enemies, friends) {
 
 // Can we MOVE here?
 function can_turtle(game, loc, enemies, friends) {
-    if ((loc[0] + loc[1]) % 2) return false; // the main one
+    if ((loc[0] + loc[1]) % 2 === 1 && loc[1] % 2 === 0) return false; // the main one
 
     if (!game.map[loc[1]][loc[0]]) return false;
     if ((loc[0]*64+loc[1]) in blocked) return false;

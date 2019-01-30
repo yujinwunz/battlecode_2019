@@ -182,6 +182,8 @@ class MyRobot extends BCAbstractRobot {
             }
             this.fuel_target = 100;
             this.karbonite_target = 100;
+            this.karbonite_squares = 0;
+            this.fuel_squares = 0;
             for (var x = 0; x < this.map[0].length; x++) {
                 for (var y = 0; y < this.map.length; y++) {
                     if (this.karbonite_map[y][x]) this.karbonite_squares++;
@@ -196,13 +198,40 @@ class MyRobot extends BCAbstractRobot {
             // ok.
         }
 
-        // Look for resource management signals
+        // Look for resource management and war signals
         this.getVisibleRobots().forEach(f => {
             if ("signal" in f && f.signal > 0 && "x" in f) {
                 var msg = decode(f.signal, f, this.me.team);
                 if (msg.type === "emission") {
                     this.fuel_target = macro.FUEL_LEVELS[msg.fuel];
                     this.karbonite_target = macro.KARBONITE_LEVELS[msg.karbonite];
+                } else if (msg.type === "deliver_justice") {
+                    if (f.signal_radius === this.map.length*this.map.length-3-this.me.team || r.signal_radius === 2) { // 2 is when pilgrim makes a church station to war from
+                        if (msg.x === 0 && msg.y === 0 && msg.mode === 0) {
+                            // special code meaning war has finished
+                            if (warrior.is_warrior(this.me.unit)) {
+                                crusader_state = preacher_state = prophet_state = warrior.TURTLING;
+                            }
+                            this.log("war is over");
+                            delete this.war_target;
+                            delete this.war_mode;
+                        } else {
+                            this.log("war signal received " + msg.x + " " + msg.y + " " + msg.mode);
+                            this.war_target = [msg.x, msg.y];
+                            this.war_mode = msg.mode;
+                            if (msg.mode === 1 && warrior.is_warrior(this.me.unit)) {
+                                this.log("I am a warrior. LEEROY JENKINS");
+                                // we are in attack war mode. If we are a warrior and close... attack!
+                                if (utils.dist(this.war_target, [this.me.x, this.me.y]) <= macro.WAR_ATTACK_RADIUS) {
+                                    crusader_state = preacher_state = prophet_state = warrior.ATTACKING;
+                                    target = this.war_target;
+                                    target_trail = nav.build_map(this.map, target, 4, nav.GAITS.SPRINT, []);
+                                } else {
+                                    this.log("We are too far");
+                                }
+                            }
+                        }
+                    }
                 } else if (msg.type === "void_signature" || msg.type === "void") this.log("bad msg from " + f.id + " " + f.signal);
             }
         });

@@ -10,11 +10,12 @@ import * as macro from 'macro.js';
 const EXPAND = 0;
 const DEPLOY_TURTLE = 1;
 const RESOURCE_TARGETS = 2;
+const WAR = 3;
 const ENDGAME_POSSIBLE_THRESHOLD = 800;
 
 const BUILD_POTENTIAL_COST_CONST = 10;
 
-const MOBILE_ENEMY_DECAY = 30; // without seeing an enemy for that long assume it's dead
+const MOBILE_ENEMY_DECAY = 50; // without seeing an enemy for that long assume it's dead
 const CERTAIN_VISIBILITY = 0.7; // Our picture of a unit's position is not 100% accurate
                                 // and so only rely on the center of its vision to deduce
                                 // enemy castle death.
@@ -25,8 +26,6 @@ var enemy_castles_remaining = 0;
 
 var enemy_warrior_sightings = []; // to keep track of old stuff
 var enemy_civilian_sightings = [];
-var ews_i = 0;
-var ecs_i = 1;
 
 var warrior_health = 0;
 var n_warriors = 0;
@@ -42,9 +41,14 @@ var expansion_attempts = {}; // if we expand and fail, maybe yall should try som
 var clearing_freq = 1; // Sometimes when there's lots of enemy sightings and friendly
                        // units, we want to clear units less frequently to avoid timeout.
 
+var war_stage_1_send = null;
+var war_stage_2_send = null;
+var war_won = null;
+
 // These are received before turn is called.
 export function on_birth(game, r, unit) {
     var id = r.id;
+    if (r.id in known_friends) return;
     known_friends[id] = {unit, id};
     if (unit === SPECS.CASTLE) {
         castles_remaining++;
@@ -134,6 +138,16 @@ export function on_ping(game, r, loc) {
                 );
                 game.log("cleared " + (enemy_warrior_sightings.length + enemy_civilian_sightings.length - prevsize) + " enemy reports");
             }
+
+            // If we are at war, finish war if cleared it.
+            if ((war_stage_1_send != null || war_stage_2_send != null) && known_friends[id].unit !== SPECS.PREACHER && utils.dist([known_friends[id].x, known_friends[id].y], game.war_target) < 9) { // Preacher has poor vision
+                if ("war_mode" in game) {
+                    if (utils.dist(game.war_target, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY) {
+                        game.log("war won at " + game.war_target[0] + " " + game.war_target[1]);
+                        if (war_won === null) war_won = game.me.turn + 10;
+                    }
+                }
+            }
         }
     }
 }
@@ -210,7 +224,9 @@ function getcode(smove) {
         return (1<<20) + arg[0] * 1000 + arg[1];
     } else if (type === RESOURCE_TARGETS) {
         return (2<<20) + arg[0] * 1000 + arg[1];
-    }
+    } else if (type === WAR) {
+        return (3<<20) + arg[0] * 1000 + arg[1];
+    }   
 }
 
 function get_unused_groups(game, steps) {
@@ -422,10 +438,11 @@ function canonical_strategic_move(game, steps, known_stations) {
         last_num_stations = known_stations.length;
         game.log("considering expedition " + to_build[0] + " " + to_build[1] + " choices:");
         game.log(available_groups_list);
+
         // If "BEST" already, done, at least do standard at least.
         if (!(getcode([EXPAND, to_build]) in throttle))
             return [EXPAND, to_build]; 
-        else if (closest_target)// We are already on our way to the best but in case it doesn't work, go to closest.
+        else if (closest_target && !(getcode([EXPAND, closest_target[0]]) in throttle))// We are already on our way to the best but in case it doesn't work, go to closest.
         {
             game.log("Expedition is already on the way so we'll go to closest instead");
             game.log(closest_target[0]);
@@ -434,7 +451,47 @@ function canonical_strategic_move(game, steps, known_stations) {
         game.log("expedition not launched");
     }
 
-    // Returns a strategic decision (not move). It's up to the caller to implement that.
+
+    // Consider raging war if we're losing. Tough part is deciding whether we should go into war.
+    if (Object.keys(karbonite_control).length * 2.1 < game.karbonite_squares || Object.keys(fuel_control).length * 2.1 < game.fuel_squares) {
+        var low_hanging_groups = get_unused_groups(game, steps).filter(g => {
+            var [loc, group] = g;
+            
+            if (!utils.on_our_side(game, loc)) return false;
+            if (is_enemy_fortified(loc)) return false;
+            return true;
+        });
+
+        // if the number of low hanging groups remaining is low, and we are not equal or better in material, we are in dire straights.
+        // Sitting is not going to win so we must go to war.
+        if (low_hanging_groups.length === 0) {
+            // We need enough resources
+                // we need a war target. An enemy fortified one closest to us will do.
+            var target = utils.argmax(get_unused_groups(game, steps), g => {
+                var [loc, group] = g;
+                if (!utils.on_our_side(game, loc)) return null;
+                return utils.depth_dist(game, loc, [game.map.length/2, game.map.length/2]);
+            });
+
+            if (target) {
+                var [loc, group] = target;
+                game.log("Losing. Choosing to rage war at " + loc[0] + " " + loc[1] + " and will wait some turns before raging.");
+                game.log("So we will prepare for war.");
+                game.log("Condition for war. " + Object.keys(karbonite_control).length + " " + game.karbonite_squares + " " + Object.keys(fuel_control).length + " " + game.fuel_squares);
+                var forw = utils.forward(game, loc, 5);
+                if (game.map[forw[1]][forw[0]] === false) forw = loc;
+                return [WAR, forw];
+            }
+        } else {
+            game.log("No majority but not condition for war. lhg: " + low_hanging_groups.length + " " + steps + " " + game.map.length);
+        }
+
+    } else {
+        game.log("No condition for war. " + Object.keys(karbonite_control).length + " " + game.karbonite_squares + " " + Object.keys(fuel_control).length + " " + game.fuel_squares);
+        game.log(karbonite_control);
+    }
+
+    return [null, null];
 }
 
 var throttle = {};
@@ -526,6 +583,22 @@ function i_should_do(game, steps, smove, known_stations) {
             });
             var [ek, ef] = macro.emission_params(arg[0], arg[1]);
             return [null, [new Message("emission", ek, ef), maxdis]];
+        }
+    } else if (type === WAR) {
+        // Pick guy with smallest distance to furtherest unit
+        var chosen_one = utils.argmax(known_stations, f => {
+            if (f.unit !== SPECS.CASTLE) return null;
+            var maxdis = 0;
+            known_stations.forEach(g => {
+                maxdis = Math.max(maxdis, utils.dist([g.x, g.y], [f.x, f.y]));
+            });
+            return -maxdis;
+        });
+
+        if (chosen_one.id === game.me.id) {
+            war_stage_1_send = steps;
+            game.log("sending war signal phase 1");
+            return [null, [new Message("deliver_justice", arg[0], arg[1], 0), game.map.length*game.map.length-3-game.me.team]];
         }
     }
 
@@ -695,7 +768,7 @@ function defense(game, steps, enemies, predators, prey, friends) {
     if (steps < 5) should_build = false;
     if (precaution_build) should_build = true;
     
-    game.log("reo: " + my_reo + " " + my_target_reo + " " + enemy_threat);
+    game.log("reo: " + my_reo + " " + my_target_reo + " " + enemy_threat + " " + phantom_threat);
     game.log("kt k ft f " + game.karbonite_target +  " " + game.karbonite + " " + game.fuel_target + " " + game.fuel);
     // Sometimes, in the early game we run out of karbonite and are outmatched. Call for dire assistance
     if (my_reo*2 < enemy_threat && game.karbonite < 70) {
@@ -793,10 +866,87 @@ function defense(game, steps, enemies, predators, prey, friends) {
 
 var order_66 = false;
 
+function maintain_throttle(steps) {
+    var del = [];
+    for (var i in throttle) {
+        if (throttle[i] < steps) del.push(i);
+    }
+    del.forEach(i => delete throttle[i]);
+}
+
+// Disregard everything. Go forward.
+function war_turn(game, steps, enemies, predators, prey, friends) {
+    if (war_won !== null && war_won < steps) {
+        war_stage_1_send = war_stage_2_send = null;
+        war_stage_2_send = null;
+        steps = null;
+        game.log("War is over.");
+        return [null, [new Message("deliver_justice", 0, 0, 0), game.map.length*game.map.length-3-game.me.team]];
+    }
+
+    if (war_stage_1_send !== null && war_stage_1_send * 1.2 + 20 <= steps) {
+        // send war stage 2
+        war_stage_1_send = null;
+        war_stage_2_send = steps;
+        game.log("Sending war attack signal");
+        return [null, [new Message("deliver_justice", game.war_target[0], game.war_target[1], 1), game.map.length*game.map.length-3-game.me.team]];
+    }
+
+    var fuel_needed = 0;
+    for (var id in known_friends) {
+        var kf = known_friends[id];
+        if ("unit" in kf && "x" in kf && "y" in kf) {
+            if (warrior.is_warrior(kf.unit) && utils.dist([kf.x, kf.y], game.war_target) < macro.WAR_ATTACK_RADIUS) {
+                fuel_needed += 4 * Math.sqrt(utils.dist([kf.x, kf.y], game.war_target));
+            }
+        }
+    }
+
+    // Build if near target, don't build if far away.
+    if (utils.dist(utils.forward(game, [game.me.x, game.me.y], 6), game.war_target) < macro.WAR_BUILD_RADIUS) {
+        var savior = SPECS.PROPHET;
+        var msg = null;
+        if (game.war_mode === 1) {
+            savior = SPECS.PREACHER;
+            msg = [new Message("attack", game.war_target[0], game.war_target[1]), 2];
+        }
+
+        if (game.karbonite >= 30 && game.fuel >= fuel_needed) {
+            game.log("sending a " + savior + " to war");
+            var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+                if (game.map[y][x] === false) return null;
+                if (utils.robots_collide(friends, [x, y])) return null;
+                if (utils.robots_collide(enemies, [x, y])) return null;
+
+                if (utils.on_our_side(game, [game.me.x, game.me.y], [x, y])) {
+                    if (game.me.x !== x && game.me.y !== y) {
+                        return 0;
+                    } else return 1; // send em forwards
+                }
+                return -1;
+            });
+
+            if (turtle[0] !== null) {
+                if (game.karbonite >= SPECS.UNITS[savior].CONSTRUCTION_KARBONITE &&
+                    game.fuel >= SPECS.UNITS[savior].CONSTRUCTION_FUEL) {
+                    return [game.buildUnit(savior, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+                }
+            }
+        } else {
+            game.log("not enough resources for war " + savior + " " + game.karbonite + " " + game.fuel + " " + fuel_needed);
+        }
+    } else {
+        game.log("I'm a bit far, will save resources for the center");
+    }
+
+    return [null, null];
+}
+
 export function turn(game, steps, enemies, predators, prey, friends) {
     game.log("enemy warrior sightings: " + enemy_warrior_sightings.length);
     game.log("civilians: " + enemy_civilian_sightings.length);
 
+    maintain_throttle(steps);
 
     var clearing_comps = 5000;
 
@@ -838,6 +988,10 @@ export function turn(game, steps, enemies, predators, prey, friends) {
             order_66 = true;
             return [null, [new Message("order66"), game.map.length*game.map.length]];
         }
+    }
+
+    if ("war_mode" in game) {
+        return war_turn(game, steps, enemies, predators, prey, friends);
     }
     
     // Execute

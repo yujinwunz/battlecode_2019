@@ -2,6 +2,7 @@ import {BCAbstractRobot, SPECS} from 'battlecode';
 import {Message, decode} from 'message.js';
 import * as message from 'message.js';
 import * as warrior from 'warrior.js';
+import * as macro from 'macro.js';
 
 import * as nav from 'nav.js';
 import * as utils from 'utils.js';
@@ -93,6 +94,36 @@ var mining_target = null;
 var target_trail = null;
 
 export function mining(game, steps, matrix, home, predators, enemies, friends) {
+    if ("war_mode" in game) {
+        if (game.war_mode === 0) {
+            // Our responsibility to ensure that during the war, we have a station near the target
+            if (utils.dist([game.me.x, game.me.y], utils.forward(game, game.war_target, -8)) <= macro.PILGRIM_WAR_RELEVANT_RADIUS) {
+                var has_church = friends.filter(f => f.unit === SPECS.CHURCH || f.unit === SPECS.CASTLE).length;
+                if (!has_church) {
+                    game.log("I see there's no church to pray at this war. I will build one.");
+                    if (game.karbonite >= 50 && game.fuel >= 200) {
+                        var msg = [new Message("deliver_justice", game.war_target[0], game.war_target[1], 0), 2];
+                        // Bulid a church. BEHIND us.
+                        var turtle = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
+                            if (game.map[y][x] === false) return null;
+                            if (utils.robots_collide(friends, [x, y])) return null;
+                            if (utils.robots_collide(enemies, [x, y])) return null;
+
+                            if (utils.on_our_side(game, [game.me.x, game.me.y], [x, y])) {
+                                if (game.me.x !== x && game.me.y !== y) {
+                                    return 0;
+                                } else return -1; // send em forwards
+                            }
+                            return 1;
+                        });
+
+                        return [game.buildUnit(SPECS.CHURCH, turtle[0]-game.me.x, turtle[1]-game.me.y), msg];
+                    }
+                }
+            }
+        }
+    }
+
     if (resource_group === null) {
         game.log("initializing. Resource group:");
         var seen = utils.null_array(game.map[0].length, game.map[1].length);
@@ -324,6 +355,7 @@ export function expedition(game, steps, matrix, target, trail, home, home_trail,
             var danger = 0;
             enemies.forEach(e => {
                 if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [x, y]))) danger++;
+                if (e.unit === SPECS.CRUSADER && utils.dist([e.x, e.y], [x, y]) <= 49) danger++;
             });
 
             if (danger) return -danger*1000000;

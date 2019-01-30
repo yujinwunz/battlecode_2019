@@ -13,6 +13,7 @@ export const KARBONITE_LEVEL_BITS = 4;
 export const FUEL_LEVEL_BITS = 4;
 
 export const UNIT_FILTER_BITS = 6;
+export const JUSTICE_MODE_BITS = 1;
 
 export const SEED_BITS = 9;
 
@@ -24,7 +25,7 @@ const TYPEMAP = {
     attack: 0b011,
 
     start_expedition: 0b100,
-    start_assult: 0b101,
+    deliver_justice: 0b101,
 
     emission: 0b110, 
 
@@ -41,7 +42,7 @@ const SIGNEDMAP = {
     attack: false, // only sent by units who have "request_backup" beforehand.
 
     start_expedition: false, // to church: Send a pilgrim there. To signify which church, only works when radio signal is exactly the distance!!!!! OMG Radio radius is information
-    start_assult: false,     // to church: Launch assult here 
+    deliver_justice: false,     // to everyone: this location needs to be killed. Radius pw: s*s-3. 
 
     emission: true,
 
@@ -83,9 +84,13 @@ export class Message {
         } else if (this.type === "castle_distress") {
             this.x = arguments[1];
             this.y = arguments[2];
-        } else if (this.type === "start_expedition" || this.type === "start_assult") {
+        } else if (this.type === "start_expedition") {
             this.x = arguments[1];
             this.y = arguments[2];
+        } else if (this.type === "deliver_justice") {
+            this.x = arguments[1]; // All arguments 0 means war has cancelled.
+            this.y = arguments[2];
+            this.mode = arguments[3];
         } else if (this.type === "emission") {
             this.karbonite = arguments[1];
             this.fuel = arguments[2];
@@ -115,9 +120,13 @@ export class Message {
         } else if (this.type === "attack") {
             msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS)); 
-        } else if (this.type === "start_expedition" || this.type === "start_assult") {
+        } else if (this.type === "start_expedition") {
             msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
             msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
+        } else if (this.type === "deliver_justice") {
+            msg |= (this.x << (16 - TYPE_BITS - COORD_BITS));
+            msg |= (this.y << (16 - TYPE_BITS - COORD_BITS - COORD_BITS));
+            msg |= (this.mode << (16 - TYPE_BITS - COORD_BITS - COORD_BITS - JUSTICE_MODE_BITS));
         } else if (this.type === "emission") {
             msg |= (this.karbonite << (16 - TYPE_BITS - KARBONITE_LEVEL_BITS));
             msg |= (this.fuel << (16 - TYPE_BITS - KARBONITE_LEVEL_BITS - FUEL_LEVEL_BITS));
@@ -161,10 +170,11 @@ export function decode(rawmsg, frombot, team) {
         var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         msg = new Message("start_expedition", x, y);
         signed = false; 
-    } else if (type === TYPEMAP.start_assult) {
+    } else if (type === TYPEMAP.deliver_justice) {
         var [x, rawmsg] = eat_msg(rawmsg, COORD_BITS);
         var [y, rawmsg] = eat_msg(rawmsg, COORD_BITS);
-        msg = new Message("start_assult", x, y);
+        var [mode, rawmsg] = eat_msg(rawmsg, JUSTICE_MODE_BITS);
+        msg = new Message("deliver_justice", x, y, mode);
         signed = false; 
     } else if (type === TYPEMAP.emission) {
         var [karbonite, rawmsg] = eat_msg(rawmsg, KARBONITE_LEVEL_BITS);
