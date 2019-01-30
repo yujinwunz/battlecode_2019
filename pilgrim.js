@@ -63,6 +63,7 @@ function expand_church(game, steps, friends) {
     var [bx, by] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 2, (x, y) => {
         if (game.map[y][x] === false) return null;
         if (game.karbonite_map[y][x] || game.fuel_map[y][x]) return null;
+        if (utils.robots_collide(friends, [x, y])) return null;
         var penalty = 0; // don't build adjacent to existing ones
         churches.forEach(c => {
             if (utils.adjacent([c.x, c.y], [x, y])) penalty += 0.5;

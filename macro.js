@@ -34,6 +34,7 @@ export function recommend_params(game, steps, my_castles, opp_castles, karbonite
     if (my_castles === 1) {
         karbonite_target *= 2;
     }
+    karbonite_target = Math.max(100, karbonite_target); // Castles seem to be thieving expansion
     return [karbonite_target, fuel_target];
 }
 

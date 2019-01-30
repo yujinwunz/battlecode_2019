@@ -35,7 +35,7 @@ var worker_health = 0;
 var karbonite_control = {};
 var fuel_control = {};
 
-var implied_enemy_castles = null;
+var implied_enemy_castles = [];
 var anticipated_church_loc = [null, null];
 var expansion_attempts = {}; // if we expand and fail, maybe yall should try something else
 
@@ -88,8 +88,7 @@ export function on_ping(game, r, loc) {
     if (!(r.id in pings)) pings[r.id] = [];
     pings[r.id].push(game.me.turn);
 
-    if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id] && r.turn > 5 && "unit" in known_friends[id]) {
-
+    if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id]) {
         if (!(r.id in recorded)) {
             recorded[r.id] = true;
             var unit = known_friends[id].unit;
@@ -388,27 +387,51 @@ function canonical_strategic_move(game, steps, known_stations) {
 
     // Consider building churches.
     var available_groups_list = get_unused_groups(game, steps);
+    var waiting_for_church = 0;
 
-    available_groups_list.filter(g => {
+    available_groups_list = available_groups_list.filter(g => {
         var [loc, group] = g;
 
         if (is_enemy_fortified(loc)) {
             return false;
         }
-        if (game.karbonite < 50 && is_already_doing(loc)) {
-            // Probably strapped for karbonite to build church, just wait for it
-            return null;
+        if (is_already_doing(loc)) {
+            waiting_for_church ++;
+            return false;
         }
+        return true;
     })
 
     var to_build_list = sorted_build_list(game, steps, available_groups_list, station_locs);
+    var closest_target = utils.argmax(available_groups_list, loc => {
+        var mindist = (1<<30);
+        station_locs.forEach(s => {
+            var tmp = Math.sqrt(utils.dist(s, loc[0]));
+            if (tmp < mindist) {
+                mindist = tmp;
+            }
+        });
+        return -mindist;
+    });
     // Just get the top tobuild. Just do it.
     var to_build = null;
     if (to_build_list.length) to_build = to_build_list[0];
+    game.log("resources replenished: " + resources_replenished);
 
-    if (to_build && !utils.in_distress(game, steps) && resources_replenished) {
+    if (to_build && !utils.in_distress(game, steps) && resources_replenished && waiting_for_church * 50 <= game.karbonite - 40) { // - 30 for 1 preacher
         last_num_stations = known_stations.length;
-        return [EXPAND, to_build]; 
+        game.log("considering expedition " + to_build[0] + " " + to_build[1] + " choices:");
+        game.log(available_groups_list);
+        // If "BEST" already, done, at least do standard at least.
+        if (!(getcode([EXPAND, to_build]) in throttle))
+            return [EXPAND, to_build]; 
+        else if (closest_target)// We are already on our way to the best but in case it doesn't work, go to closest.
+        {
+            game.log("Expedition is already on the way so we'll go to closest instead");
+            game.log(closest_target[0]);
+            return [EXPAND, closest_target[0]];
+        }
+        game.log("expedition not launched");
     }
 
     // Returns a strategic decision (not move). It's up to the caller to implement that.
@@ -458,6 +481,7 @@ function i_should_do(game, steps, smove, known_stations) {
             if (church.id === game.me.id) {
                 // we are the expander.
                 throttle[code] = steps + Math.max(10, (steps-100)/5) + Math.sqrt(utils.dist(arg, [game.me.x, game.me.y]));
+                game.log("Launching expedition ourselves");
                 return launch_expedition(game, arg);
             } else {
                 // signal to the church
@@ -474,13 +498,12 @@ function i_should_do(game, steps, smove, known_stations) {
                     ]
                 ];
             }
-
-            // If we're going into opponent, expect to want to wait a bit longer if it fails
-            if (!utils.on_our_side(game, arg)) {
-                throttle[code] *= 3;
-            }
         } else {
             // Wanted to build something but it's not my business.
+            game.log("Launching expedition but none of my business");
+            var cx = known_friends[church.id].x, cy = known_friends[church.id].y;
+            throttle[code] = steps + Math.max(10, (steps-100)/5) + Math.sqrt(utils.dist(arg, [cx, cy]));
+            resources_replenished = false;
         }
     } else if (type === RESOURCE_TARGETS) {
         if (game.fuel < game.map.length) return [null, null];
@@ -672,6 +695,8 @@ function defense(game, steps, enemies, predators, prey, friends) {
     if (steps < 5) should_build = false;
     if (precaution_build) should_build = true;
     
+    game.log("reo: " + my_reo + " " + my_target_reo + " " + enemy_threat);
+    game.log("kt k ft f " + game.karbonite_target +  " " + game.karbonite + " " + game.fuel_target + " " + game.fuel);
     // Sometimes, in the early game we run out of karbonite and are outmatched. Call for dire assistance
     if (my_reo*2 < enemy_threat && game.karbonite < 70) {
         if (last_distress_on + DISTRESS_DELAY < steps) {
@@ -684,7 +709,14 @@ function defense(game, steps, enemies, predators, prey, friends) {
                 closest = utils.argmax(enemy_warrior_sightings, f=> {
                     return -utils.dist([f[1], f[2]], [game.me.x, game.me.y]);
                 });
-                closest = [closest[1], closest[2]];
+                if (!closest) {
+                    closest = utils.argmax(enemy_civilian_sightings, f=> {
+                        return -utils.dist([f[1], f[2]], [game.me.x, game.me.y]);
+                    });
+                }
+                if (closest) {
+                    closest = [closest[1], closest[2]];
+                }
             } else closest = [closest.x, closest.y];
 
             if (closest) {
@@ -771,11 +803,13 @@ export function turn(game, steps, enemies, predators, prey, friends) {
     clearing_freq = Math.ceil((enemy_warrior_sightings.length + enemy_civilian_sightings.length) * Object.keys(known_friends).length / clearing_comps);
 
     game.log("it is now turn " + steps);
-    if (implied_enemy_castles === null) init_implied_castles(game);
     if (game.me.turn === 1) {
+        clearing_freq = 1;
         known_friends[game.me.id] = {id:game.me.id, unit:game.me.unit, x:game.me.x, y:game.me.y};
         on_birth(game, game.me, game.me.unit);
         on_ping(game, game.me, [game.me.x, game.me.y]);
+    } else if (game.me.turn === 4) {
+        init_implied_castles(game);
     }
     if (order_66) {
         return farm.execute_order_66(game);
@@ -816,7 +850,7 @@ export function turn(game, steps, enemies, predators, prey, friends) {
 
     if (!action && !msg) {
         // Priority 2. Strategic calls
-        if (steps > 6) { // wait till we know all the castles
+        if (steps >= 4) { // wait till we know all the castles
             var known_stations = filter_known_friends((i, u, x, y) => 
                 (u === SPECS.CASTLE || u === SPECS.CHURCH) && x !== undefined && x !== null && y !== undefined && y !== null
             );
