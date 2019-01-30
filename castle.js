@@ -15,6 +15,9 @@ const ENDGAME_POSSIBLE_THRESHOLD = 800;
 const BUILD_POTENTIAL_COST_CONST = 10;
 
 const MOBILE_ENEMY_DECAY = 30; // without seeing an enemy for that long assume it's dead
+const CERTAIN_VISIBILITY = 0.7; // Our picture of a unit's position is not 100% accurate
+                                // and so only rely on the center of its vision to deduce
+                                // enemy castle death.
 
 var known_friends = {};
 var castles_remaining = 0;
@@ -35,6 +38,9 @@ var fuel_control = {};
 var implied_enemy_castles = null;
 var anticipated_church_loc = [null, null];
 var expansion_attempts = {}; // if we expand and fail, maybe yall should try something else
+
+var clearing_freq = 1; // Sometimes when there's lots of enemy sightings and friendly
+                       // units, we want to clear units less frequently to avoid timeout.
 
 // These are received before turn is called.
 export function on_birth(game, r, unit) {
@@ -61,6 +67,8 @@ export function on_birth(game, r, unit) {
     else worker_health += SPECS.UNITS[unit].STARTING_HP;
 }
 
+var pings = {}; // ping list to keep track of "all clear" signals - 3 pings in a row
+
 export function on_ping(game, r, loc) {
     if (!(r.id in known_friends)) {
         known_friends[r.id] = {id:r.id};
@@ -76,7 +84,13 @@ export function on_ping(game, r, loc) {
         known_friends[id].y = loc[1];
     }
 
-    if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id] && r.turn > 10) {
+    if (!(r.id in pings)) pings[r.id] = [];
+    pings[r.id].push(game.me.turn);
+
+    if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id] && r.turn > 5 && "unit" in known_friends[id] && pings[r.id].length >= 3 && pings[r.id][pings[r.id].length-3] === game.me.turn-2) {
+        game.log("all clear from");
+        game.log(r);
+        game.log("reported loc " + loc[0] + " " + loc[1]);
         // Receiving a heartbeat means there are no enemies in sight.
         // On record, forget all known enemy castles and churches in it's vision range.
 
@@ -88,13 +102,26 @@ export function on_ping(game, r, loc) {
             });
         }
         implied_enemy_castles.forEach(f => {
-            if (utils.dist(f, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS) {
+            if (utils.dist(f, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY) {
+                game.log("cleared enemy castle at " + f[0] + " " + f[1]);
                 enemy_castles_remaining--;
             }
         });
         implied_enemy_castles = implied_enemy_castles.filter(f => 
-            utils.dist(f, [known_friends[id].x, known_friends[id].y]) > SPECS.UNITS[known_friends[id].unit].VISION_RADIUS
+            utils.dist(f, [known_friends[id].x, known_friends[id].y]) > SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
         );
+
+        // Disregard all sightings in this area.
+        if ((r.id + game.me.turn) % clearing_freq === 0) { // throttle to avoid timeouts
+            var prevsize = enemy_warrior_sightings.length + enemy_civilian_sightings.length;
+            enemy_warrior_sightings = enemy_warrior_sightings.filter(f => 
+                utils.dist([f[1], f[2]], [known_friends[id].x, known_friends[id].y]) < SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
+            );
+            enemy_civilian_sightings = enemy_civilian_sightings.filter(f => 
+                utils.dist([f[1], f[2]], [known_friends[id].x, known_friends[id].y]) < SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
+            );
+            game.log("cleared " + (enemy_warrior_sightings.length + enemy_civilian_sightings.length - prevsize) + " enemy reports");
+        }
     }
 }
 
@@ -719,6 +746,13 @@ function defense(game, steps, enemies, predators, prey, friends) {
 var order_66 = false;
 
 export function turn(game, steps, enemies, predators, prey, friends) {
+    game.log("enemy warrior sightings: " + enemy_warrior_sightings.length);
+    game.log("civilians: " + enemy_civilian_sightings.length);
+
+    var clearing_comps = 5000;
+
+    clearing_freq = Math.ceil((enemy_warrior_sightings.length + enemy_civilian_sightings.length) * Object.keys(known_friends).length / clearing_comps);
+
     game.log("it is now turn " + steps);
     if (implied_enemy_castles === null) init_implied_castles(game);
     if (game.me.turn === 1) {
