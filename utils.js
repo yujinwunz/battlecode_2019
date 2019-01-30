@@ -317,6 +317,15 @@ export function on_our_side(game, loc, rloc=null) {
     }
 }
 
+export function depth_dist(game, loc, rloc=null) {
+    if (rloc === null) rloc = [game.map[0].length/2, game.map.length/2];
+    if (game.symmetry === VERTICAL) {
+        return Math.abs(loc[0] - rloc[0]);
+    } else {
+        return Math.abs(loc[1] - rloc[1]);
+    }
+}
+
 export function forward(game, loc, amount=1) {
     if (game.symmetry === VERTICAL) {
         if (game.me.team === 0) return [loc[0]+amount, loc[1]];

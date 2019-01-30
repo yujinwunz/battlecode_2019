@@ -68,6 +68,7 @@ export function on_birth(game, r, unit) {
 }
 
 var pings = {}; // ping list to keep track of "all clear" signals - 3 pings in a row
+var recorded = {};
 
 export function on_ping(game, r, loc) {
     if (!(r.id in known_friends)) {
@@ -87,40 +88,53 @@ export function on_ping(game, r, loc) {
     if (!(r.id in pings)) pings[r.id] = [];
     pings[r.id].push(game.me.turn);
 
-    if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id] && r.turn > 5 && "unit" in known_friends[id] && pings[r.id].length >= 3 && pings[r.id][pings[r.id].length-3] === game.me.turn-2) {
-        game.log("all clear from");
-        game.log(r);
-        game.log("reported loc " + loc[0] + " " + loc[1]);
-        // Receiving a heartbeat means there are no enemies in sight.
-        // On record, forget all known enemy castles and churches in it's vision range.
+    if ("unit" in known_friends[id] && "x" in known_friends[id] && "y" in known_friends[id] && r.turn > 5 && "unit" in known_friends[id]) {
 
-        var unit = known_friends[id].unit;
-        if (unit === SPECS.CASTLE || unit === SPECS.CHURCH) {
-            utils.iterlocs(game.map[0].length, game.map.length, loc, farm.RESOURCE_MAX_R, (x, y) => {
-                if (game.karbonite_map[y][x]) karbonite_control[y*64+x] = true;
-                if (game.fuel_map[y][x]) fuel_control[y*64+x] = true;
-            });
-        }
-        implied_enemy_castles.forEach(f => {
-            if (utils.dist(f, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY) {
-                game.log("cleared enemy castle at " + f[0] + " " + f[1]);
-                enemy_castles_remaining--;
+        if (!(r.id in recorded)) {
+            recorded[r.id] = true;
+            var unit = known_friends[id].unit;
+            if (unit === SPECS.CASTLE || unit === SPECS.CHURCH) {
+                utils.iterlocs(game.map[0].length, game.map.length, [known_friends[id].x, known_friends[id].y], farm.RESOURCE_MAX_R, (x, y) => {
+                    if (game.karbonite_map[y][x]) {
+                        if (!(y*64+x in karbonite_control)) karbonite_control[y*64+x] = 0;
+                        karbonite_control[y*64+x]++;
+                    }
+                    if (game.fuel_map[y][x]) {
+                        if (!(y*64+x in fuel_control)) fuel_control[y*64+x] = 0;
+                        fuel_control[y*64+x]++;
+                    }
+                });
             }
-        });
-        implied_enemy_castles = implied_enemy_castles.filter(f => 
-            utils.dist(f, [known_friends[id].x, known_friends[id].y]) > SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
-        );
+        }
 
-        // Disregard all sightings in this area.
-        if ((r.id + game.me.turn) % clearing_freq === 0) { // throttle to avoid timeouts
-            var prevsize = enemy_warrior_sightings.length + enemy_civilian_sightings.length;
-            enemy_warrior_sightings = enemy_warrior_sightings.filter(f => 
-                utils.dist([f[1], f[2]], [known_friends[id].x, known_friends[id].y]) < SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
+        if (pings[r.id].length >= 3 && pings[r.id][pings[r.id].length-3] === game.me.turn-2) {
+            game.log("all clear from");
+            game.log(r);
+            game.log(known_friends[id]);
+            game.log("reported loc " + loc[0] + " " + loc[1]);
+            // Receiving a heartbeat means there are no enemies in sight.
+            // On record, forget all known enemy castles and churches in it's vision range.
+            implied_enemy_castles.forEach(f => {
+                if (utils.dist(f, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY) {
+                    game.log("cleared enemy castle at " + f[0] + " " + f[1]);
+                    enemy_castles_remaining--;
+                }
+            });
+            implied_enemy_castles = implied_enemy_castles.filter(f => 
+                utils.dist(f, [known_friends[id].x, known_friends[id].y]) > SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
             );
-            enemy_civilian_sightings = enemy_civilian_sightings.filter(f => 
-                utils.dist([f[1], f[2]], [known_friends[id].x, known_friends[id].y]) < SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
-            );
-            game.log("cleared " + (enemy_warrior_sightings.length + enemy_civilian_sightings.length - prevsize) + " enemy reports");
+
+            // Disregard all sightings in this area.
+            if ((r.id + game.me.turn) % clearing_freq === 0) { // throttle to avoid timeouts
+                var prevsize = enemy_warrior_sightings.length + enemy_civilian_sightings.length;
+                enemy_warrior_sightings = enemy_warrior_sightings.filter(f => 
+                    utils.dist([f[1], f[2]], [known_friends[id].x, known_friends[id].y]) > SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
+                );
+                enemy_civilian_sightings = enemy_civilian_sightings.filter(f => 
+                    utils.dist([f[1], f[2]], [known_friends[id].x, known_friends[id].y]) > SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY
+                );
+                game.log("cleared " + (enemy_warrior_sightings.length + enemy_civilian_sightings.length - prevsize) + " enemy reports");
+            }
         }
     }
 }
@@ -141,8 +155,10 @@ export function on_death(game, id) {
         if ("x" in known_friends[id] && "y" in known_friends[id]) {
             var x = known_friends[id].x, y = known_friends[id].y;
             utils.iterlocs(game.map[0].length, game.map.length, [x, y], farm.RESOURCE_MAX_R, (x, y) => {
-                if (game.karbonite_map[y][x]) delete karbonite_control[y*64+x];
-                if (game.fuel_map[y][x]) delete fuel_control[y*64+x];
+                if (game.karbonite_map[y][x]) karbonite_control[y*64+x]--;
+                if (game.fuel_map[y][x]) fuel_control[y*64+x]--;
+                if (!karbonite_control[y*64+x]) delete karbonite_control[y*64+x];
+                if (!fuel_control[y*64+x]) delete fuel_control[y*64+x];
             });
         }
     }
@@ -749,6 +765,7 @@ export function turn(game, steps, enemies, predators, prey, friends) {
     game.log("enemy warrior sightings: " + enemy_warrior_sightings.length);
     game.log("civilians: " + enemy_civilian_sightings.length);
 
+
     var clearing_comps = 5000;
 
     clearing_freq = Math.ceil((enemy_warrior_sightings.length + enemy_civilian_sightings.length) * Object.keys(known_friends).length / clearing_comps);
@@ -757,6 +774,8 @@ export function turn(game, steps, enemies, predators, prey, friends) {
     if (implied_enemy_castles === null) init_implied_castles(game);
     if (game.me.turn === 1) {
         known_friends[game.me.id] = {id:game.me.id, unit:game.me.unit, x:game.me.x, y:game.me.y};
+        on_birth(game, game.me, game.me.unit);
+        on_ping(game, game.me, [game.me.x, game.me.y]);
     }
     if (order_66) {
         return farm.execute_order_66(game);
@@ -764,7 +783,21 @@ export function turn(game, steps, enemies, predators, prey, friends) {
     // Observe
     if (church_locs === null) init(game);
     prune_known_enemies(game, steps);
-    
+
+    var groups = get_unused_groups(game, steps);
+    game.log("enemy warrior sightings:");
+    game.log(enemy_warrior_sightings);
+    game.log("enemy civilian sightings:");
+    game.log(enemy_civilian_sightings);
+    game.log("groups:");
+    groups.forEach(g => {
+        game.log(g[0] + " " + is_enemy_fortified(g[0]) + " " + is_enemy_occupied(g));
+    });
+    game.log("karbonite_control: " + Object.keys(karbonite_control).length);
+    game.log(karbonite_control);
+    game.log("fuel_control: " + Object.keys(fuel_control).length);
+    game.log(fuel_control);
+
     if (steps > ENDGAME_POSSIBLE_THRESHOLD) { // save computing with this condition
         var endgame = macro.is_endgame(game, steps, castles_remaining, enemy_castles_remaining, known_friends);
         if (endgame) {

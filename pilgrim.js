@@ -176,21 +176,23 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
                     return -utils.dist([c.x, c.y], [game.me.x, game.me.y]);
                 });
                 if (!closest) closest = home;
-                var trail = nav.build_map_cached(game.map, [closest.x, closest.y], SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.SPRINT, 10, resource_group);
-                var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
-                    if (utils.robots_collide(friends, [x, y])) return null;
-                    if (utils.robots_collide(enemies, [x, y])) return null;
-                    if (game.map[y][x] === false) return null;
-                    var is_adj = false;
-                    churches.forEach(h => {
-                        if (utils.adjacent(h, [x, y])) is_adj = true; 
+                if (closest) {
+                    var trail = nav.build_map_cached(game.map, [closest.x, closest.y], SPECS.UNITS[game.me.unit].SPEED, nav.GAITS.SPRINT, 10, resource_group);
+                    var [nx, ny] = utils.iterlocs(game.map[0].length, game.map.length, [game.me.x, game.me.y], 4, (x, y) => {
+                        if (utils.robots_collide(friends, [x, y])) return null;
+                        if (utils.robots_collide(enemies, [x, y])) return null;
+                        if (game.map[y][x] === false) return null;
+                        var is_adj = false;
+                        churches.forEach(h => {
+                            if (utils.adjacent(h, [x, y])) is_adj = true; 
+                        });
+                        if (is_adj) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
+                        if (!trail[y][x]) return null;
+                        return -trail[y][x][0] * 1000 - trail[y][x][1];
                     });
-                    if (is_adj) return 100000 - utils.dist([x, y], [game.me.x, game.me.y]);
-                    if (!trail[y][x]) return null;
-                    return -trail[y][x][0] * 1000 - trail[y][x][1];
-                });
-                if (nx !== game.me.x || ny !== game.me.y) { 
-                    if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+                    if (nx !== game.me.x || ny !== game.me.y) { 
+                        if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+                    }
                 }
             }
         }
@@ -236,8 +238,13 @@ export function mining(game, steps, matrix, home, predators, enemies, friends) {
     
         if (!action) {
             var [nx, ny] = nav.path_step(target_trail, [game.me.x, game.me.y], 4, game.getVisibleRobots());
-            if (nx !== game.me.x || ny !== game.me.y) {
-                if (nx !== null) action = game.move(nx-game.me.x, ny-game.me.y);
+            if (nx !== null && (nx !== game.me.x || ny !== game.me.y)) {
+                // don't step into danger
+                var danger = 0;
+                enemies.forEach(e => {
+                    if (utils.in_fire_range(e.unit, utils.dist([e.x, e.y], [nx, ny]))) danger++;
+                });
+                if (!danger) action = game.move(nx-game.me.x, ny-game.me.y);
             }
         }
     }
