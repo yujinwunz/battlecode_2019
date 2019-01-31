@@ -1,0 +1,69 @@
+Justice Of The War
+==================
+
+Full write up: https://[coming soon]/
+
+In the war of the crusades, there can only be justice if there is peace.
+
+This battlecode 2019 AI plays a tight-agressive strategy. It will rapidly sprint for easy resources initally and becomes content upon reaching equality, thus entering a defensive tie-breaking setup. However if it fails to do so by the midgame, it goes into all out war until at least equality is reached again.
+
+This bot made it to the finals which are currently running as of writing.
+
+Battlecode 2019
+===============
+
+In this year's battlecode, two teams play against each other on a map that is randomly generated in each game. Karbonite and fuel are scattered in pockets around the map. Both teams start with symmetrical immobile castles which are capable of attack. A team's goal is to kill the enemy castles, or have more unit health by turn 1001. 
+
+Castles are capable of building mobile pilgrims (miners), crusaders (high-speed attacker), prophets (high-range high-fuel), and preachers (high-damage low-vision). Pilgrims can also build churches, which are stationary units that can build other mobile units and receive resources from miners into the global pool.
+
+Units run in their own process, and communicate via 16 bit broadcasts with cost relative to the signal radius. A team's units can also send 8 bit signals to all it's castles for free.
+
+Bot Strategy
+============
+
+1. Economy & Mining
+
+Initially, pilgrims are sent out rapidly to available resources close and far away. When travelling to a far away resource group, pilgrims build a new church so that it can deposit quickly. Further "pilgrimages" are launched from the closest already built church. As the game progresses, pilgrims may build extra churches within a group to avoid needing to walk to a church at all and improve mining efficiency.
+
+At any time, there are up to 2 "pilgrimages" to resources at once. This increases the speed of development and territory claiming, at the expense of not having lots of resources to defend.
+
+The AI prefers to race to central resources which tend to be in contention and game-deciding, followed by close resources. This seemed to produce a high win-rate.
+
+2. Sitting Tight
+
+Once the AI has determined that it reached equality or better, it sends out a lattice of long range prophets. The idea is entirely defensive, for enemies to attack it, they need to lose many units to instant death to get a turn at attacking the prophets. Because the game is won on a tiebreaker of unit health if there is no castle annihilation, an efficient lattice will win in an equal resource situation.
+
+Prophets are sent forwards in front of the station that built it, so that it forms a bit of an "umbrella".
+
+To get better chance at the tiebreaker, crusaders are built (with better karbonite/HP ratio) in higher proportions to prophets as the game progresses. The crusaders serve little combat purpose due to their low range and tendancy to get picked off, so they are sent to the back.
+
+Unfortunately there is a bug in my final submission which causes the crusaders to not lattice properly, and block the castle from spawning new units at around round 600.
+
+3. Raging war
+
+If the AI detects that it has exhausted all low hanging fruit resources, but still hasn't reached equality, then it knows that it can't win by sitting tight because the opponent has claimed more resources and will develop a bigger lattice for the tiebreaker. And so, it will start a war.
+
+The deepest enemy controlled resource pocket in our position is chosen as the war target. Targets are taken down one at a time until equality or better is reached. The entire map enters war against that one target. Because the maps are symmetrical, if we fail to expand to equality then there must be an enemy controlled resource pocket in our position.
+
+The war comes in 2 phases. In the first garrison phase, churches and castles near the target build prophets while saving enough fuel for them to attack. In the 2nd phase, they all rush the target while castles and churches switch to building preachers, hoping that the opponent position is worn down enough for them to be effective.
+
+Once equality is reached, the AI goes back into Sitting Tight mode.
+
+4. Defense
+
+There are 3 types of attacks. Initial rush, sustained bombardment, and mid-lategame wave.
+
+To defend against an inital rush, castles are alerted about incoming enemy units when they enter friendly vision. While the enemy is far away, prophets are built. As they approach closer, preachers are built. If they are in attacking range, units around the castle move in on the enemy's approach point. Units are spawned in a left-right pattern to spread them out, which has tested to work well.
+
+There is no specific defense on sustained bombardment. Castles and churches that detect enemies reactively build tougher defenses and replace them if it gets depleted or if there's an abundance of resources.
+
+To sustain a surprise lategame wave, castle informs all units on a defensive fuel reserve to keep. Unit production is kept low to maintain that fuel budget in case of an attack. Becuase we maintain a thick prophet armour, attacks fail on us unless we run out of fuel.
+
+Communication
+==================
+
+Castles are the central control unit for the strategy. Castles get information from all friendly units, via castle talk, including unit location, type, and enemy sightings. When deciding strategy, castles use the same canonical information to arrive at idential conclusions. Then, the closest castle to the next step is the one that executes, all without any inter-castle communication needed.
+
+When a unit spots an enemy, it is able to tell castle whether it's a soldier or civillian, and it s location relative to the unit with accuracy +/= 1 square, in just one 8-bit msg. When there are no enemies in sight, it sends a "ping" updating its x or y location. It will also be forced to update location every 3 turns so that relative distances don't get too out of whack. This way, castles can prepare for early rushes before the castle even sees a unit, but only if the rush happens to go past a friendly unit's FOV.
+
+Castles are also able to verify which places on the map are safe, since a unit would ping 3 times in a row only if there are no enemy units in sight. Castles can detect the end of a war this way, as well as enemy castle deaths. Castles of course also know enemy occupied resource chunks, which it will avoid sending pilgrimages to in favour of possibly unclaimed ones.
