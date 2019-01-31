@@ -140,11 +140,13 @@ export function on_ping(game, r, loc) {
             }
 
             // If we are at war, finish war if cleared it.
-            if ((war_stage_1_send != null || war_stage_2_send != null) && known_friends[id].unit !== SPECS.PREACHER && utils.dist([known_friends[id].x, known_friends[id].y], game.war_target) < 9) { // Preacher has poor vision
-                if ("war_mode" in game) {
-                    if (utils.dist(game.war_target, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY) {
-                        game.log("war won at " + game.war_target[0] + " " + game.war_target[1]);
-                        if (war_won === null) war_won = game.me.turn + 10;
+            if ("war_target" in game) {
+                if ((war_stage_1_send !== null || war_stage_2_send !== null) && known_friends[id].unit !== SPECS.PREACHER && utils.dist([known_friends[id].x, known_friends[id].y], game.war_target) < 9) { // Preacher has poor vision
+                    if ("war_mode" in game) {
+                        if (utils.dist(game.war_target, [known_friends[id].x, known_friends[id].y]) <= SPECS.UNITS[known_friends[id].unit].VISION_RADIUS * CERTAIN_VISIBILITY) {
+                            game.log("war won at " + game.war_target[0] + " " + game.war_target[1]);
+                            if (war_won === null) war_won = game.me.turn + 10;
+                        }
                     }
                 }
             }
@@ -876,15 +878,14 @@ function maintain_throttle(steps) {
 
 // Disregard everything. Go forward.
 function war_turn(game, steps, enemies, predators, prey, friends) {
-    if (war_won !== null && war_won < steps) {
+    if ((war_won !== null && war_won < steps) || (war_stage_2_send !== null && war_stage_2_send + macro.MAX_WAR_DURATION < steps)) {
         war_stage_1_send = war_stage_2_send = null;
-        war_stage_2_send = null;
-        steps = null;
+        war_won = null;
         game.log("War is over.");
         return [null, [new Message("deliver_justice", 0, 0, 0), game.map.length*game.map.length-3-game.me.team]];
     }
 
-    if (war_stage_1_send !== null && war_stage_1_send * 1.2 + 20 <= steps) {
+    if (war_stage_1_send !== null && war_stage_1_send * 1.1 + 30 <= steps) {
         // send war stage 2
         war_stage_1_send = null;
         war_stage_2_send = steps;
@@ -897,7 +898,7 @@ function war_turn(game, steps, enemies, predators, prey, friends) {
         var kf = known_friends[id];
         if ("unit" in kf && "x" in kf && "y" in kf) {
             if (warrior.is_warrior(kf.unit) && utils.dist([kf.x, kf.y], game.war_target) < macro.WAR_ATTACK_RADIUS) {
-                fuel_needed += 4 * Math.sqrt(utils.dist([kf.x, kf.y], game.war_target));
+                fuel_needed += 4 * Math.sqrt(utils.dist([kf.x, kf.y], game.war_target)) + 50;
             }
         }
     }

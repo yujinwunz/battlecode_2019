@@ -16,6 +16,7 @@ export const WAR_ATTACK_RADIUS = 600;
 export const WAR_BUILD_RADIUS = 400;
 export const PILGRIM_WAR_RELEVANT_RADIUS = 130;
 
+export const MAX_WAR_DURATION = 120;
 
 export function emission_params(karbonite, fuel) {
     var karb = 0, f = 0;

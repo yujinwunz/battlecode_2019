@@ -206,7 +206,8 @@ class MyRobot extends BCAbstractRobot {
                     this.fuel_target = macro.FUEL_LEVELS[msg.fuel];
                     this.karbonite_target = macro.KARBONITE_LEVELS[msg.karbonite];
                 } else if (msg.type === "deliver_justice") {
-                    if (f.signal_radius === this.map.length*this.map.length-3-this.me.team || r.signal_radius === 2) { // 2 is when pilgrim makes a church station to war from
+                    this.last_war = steps;
+                    if (f.signal_radius === this.map.length*this.map.length-3-this.me.team || f.signal_radius === 2) { // 2 is when pilgrim makes a church station to war from
                         if (msg.x === 0 && msg.y === 0 && msg.mode === 0) {
                             // special code meaning war has finished
                             if (warrior.is_warrior(this.me.unit)) {
@@ -235,6 +236,13 @@ class MyRobot extends BCAbstractRobot {
                 } else if (msg.type === "void_signature" || msg.type === "void") this.log("bad msg from " + f.id + " " + f.signal);
             }
         });
+
+        if ("war_mode" in this && this.last_war + macro.MAX_WAR_DURATION < steps) {
+            delete this.war_target;
+            delete this.war_mode;
+            this.log("war is expired");
+            crusader_state = preacher_state = prophet_state = warrior.TURTLING;
+        }
 
         var matrix;
         if (this.me.unit !== SPECS.CASTLE && this.me.unit !== SPECS.CHURCH) {

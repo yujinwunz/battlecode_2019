@@ -75,9 +75,8 @@ function expand_church(game, steps, friends) {
     if (bx !== null) {
         var benefit = num_dangling_resources(game, steps, [bx, by], churches);
         
-        if (benefit < 2) return null;
         // Janky heuristics here
-        if (game.fuel*(benefit/1.5)-100 >= game.fuel_target && game.karbonite*(benefit/1.5)-50 >= game.karbonite_target) {
+        if (game.fuel*(benefit/1.6)-100 >= game.fuel_target && game.karbonite*(benefit/1.6)-50 >= game.karbonite_target) {
             if (utils.robots_collide(friends, [bx, by])) {
                 return null;
             }

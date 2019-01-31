@@ -174,7 +174,7 @@ function war_turn(game, steps, enemies, predators, friends) {
     friends.forEach(kf => {
         if ("unit" in kf && "x" in kf && "y" in kf) {
             if (warrior.is_warrior(kf.unit) && utils.dist([kf.x, kf.y], game.war_target) < macro.WAR_ATTACK_RADIUS) {
-                fuel_needed += 4 * Math.sqrt(utils.dist([kf.x, kf.y], game.war_target));
+                fuel_needed += 4 * Math.sqrt(utils.dist([kf.x, kf.y], game.war_target)) + 50;
             }
         }
     });
