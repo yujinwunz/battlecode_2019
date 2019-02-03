@@ -1,22 +1,7 @@
 Justice Of The War
 ==================
 
-Full write up: https://[coming soon]/
-
-In the war of the crusades, there can only be justice if there is peace.
-
-This battlecode 2019 AI plays a tight-agressive strategy. It will rapidly sprint for easy resources initally and becomes content upon reaching equality, thus entering a defensive tie-breaking setup. However if it fails to do so by the midgame, it goes into all out war until at least equality is reached again.
-
-This bot made it to the finals which are currently running as of writing.
-
-Battlecode 2019
-===============
-
-In this year's battlecode, two teams play against each other on a map that is randomly generated in each game. Karbonite and fuel are scattered in pockets around the map. Both teams start with symmetrical immobile castles which are capable of attack. A team's goal is to kill the enemy castles, or have more unit health by turn 1001. 
-
-Castles are capable of building mobile pilgrims (miners), crusaders (high-speed attacker), prophets (high-range high-fuel), and preachers (high-damage low-vision). Pilgrims can also build churches, which are stationary units that can build other mobile units and receive resources from miners into the global pool.
-
-Units run in their own process, and communicate via 16 bit broadcasts with cost relative to the signal radius. A team's units can also send 8 bit signals to all it's castles for free.
+[Read my full postmortem] (https://yujin.cloud/2019/02/03/battlecode-2019-an-autopsy/)
 
 Bot Strategy
 ============
